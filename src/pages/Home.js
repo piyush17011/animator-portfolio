@@ -283,7 +283,7 @@ const Home = () => {
             <div className="mb-8 reveal-para">
               <div className="relative w-48 h-48 md:w-56 md:h-56">
                 <img
-                  src="/omkar.jpg"
+                  src="/ob.png"
                   alt="Omkar Bane"
                   className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
                   style={{ border: "1px solid #1A1A2E" }}

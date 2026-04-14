@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useInView } from "react-intersection-observer";
 import PageTransition from "../components/PageTransition";
 import Footer from "../components/Footer";
 import { getById, projects } from "../data/projects";
@@ -12,12 +13,18 @@ const ModelViewer = React.lazy(() => import("../components/ModelViewer"));
 gsap.registerPlugin(ScrollTrigger);
 
 const ProjectDetail = () => {
+  // Scroll to top on every project page load
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // Prevent ThreeHero from running while ModelViewer is active
   // — avoids WebGL context loss on mobile (browsers cap active contexts)
   useEffect(() => {
     document.body.setAttribute("data-no-three", "true");
     return () => document.body.removeAttribute("data-no-three");
   }, []);
+
   const { id } = useParams();
   const navigate = useNavigate();
   const project = getById(id);
@@ -26,6 +33,12 @@ const ProjectDetail = () => {
   const titleRef = useRef(null);
   const contentRef = useRef(null);
   const galleryRef = useRef(null);
+
+  // Only mount ModelViewer once the viewer container is visible
+  const { ref: modelRef, inView: modelInView } = useInView({
+    triggerOnce: true,
+    threshold: 0.1,
+  });
 
   // Find prev / next projects for navigation
   const currentIndex = projects.findIndex((p) => p.id === id);
@@ -126,7 +139,6 @@ const ProjectDetail = () => {
 
       {/* ── Hero ── */}
       <section ref={heroRef} className="relative h-[70vh] overflow-hidden">
-        {/* Parallax image — object-position keeps subject centered vertically */}
         <div className="hero-img absolute inset-0 scale-110">
           <img
             src={project.thumbnail}
@@ -135,15 +147,12 @@ const ProjectDetail = () => {
             style={{ objectPosition: "center 20%" }}
           />
         </div>
-        {/* Dark vignette */}
         <div
           className="absolute inset-0"
           style={{
             background: "linear-gradient(to bottom, rgba(5,5,8,0.2) 0%, rgba(5,5,8,0.85) 100%)",
           }}
         />
-
-        {/* Hero title */}
         <div className="absolute bottom-0 left-0 right-0 px-6 md:px-12 pb-16">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -188,7 +197,7 @@ const ProjectDetail = () => {
               </p>
             </div>
 
-            {/* 3D Model Viewer */}
+            {/* 3D Model Viewer — only mounts when scrolled into view */}
             {project.model && (
               <motion.div
                 className="mt-12 content-block"
@@ -198,16 +207,45 @@ const ProjectDetail = () => {
                 transition={{ duration: 0.8 }}
               >
                 <p className="font-mono text-xs text-slate tracking-widest uppercase mb-4">3D Model — Interactive</p>
-               <div className="relative border border-border-dim bg-card-bg overflow-hidden" style={{ height: "500px" }}>
-                  <Suspense fallback={
-                    <div className="w-full h-full flex items-center justify-center">
-                      <span className="font-mono text-xs text-slate animate-pulse">Loading model...</span>
+                <div
+                  ref={modelRef}
+                  className="relative border border-border-dim bg-card-bg overflow-hidden"
+                  style={{ height: "500px" }}
+                >
+                  {modelInView ? (
+                    <Suspense
+                      fallback={
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                          <motion.div
+                            className="w-8 h-8 border border-ember"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                          />
+                          <span className="font-mono text-xs text-slate animate-pulse">
+                            Loading model...
+                          </span>
+                        </div>
+                      }
+                    >
+                      <ModelViewer modelPath={project.model} />
+                    </Suspense>
+                  ) : (
+                    /* Placeholder shown before user scrolls to it */
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                      <motion.div
+                        className="w-8 h-8 border border-border-dim"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                      />
+                      <span className="font-mono text-xs text-slate">
+                        Scroll to load model
+                      </span>
                     </div>
-                  }>
-                    <ModelViewer modelPath={project.model} />
-                  </Suspense>
+                  )}
                   <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
-                    <span className="font-mono text-xs text-slate bg-void px-3 py-1.5 border border-border-dim">drag to rotate · scroll to zoom</span>
+                    <span className="font-mono text-xs text-slate bg-void px-3 py-1.5 border border-border-dim">
+                      drag to rotate · scroll to zoom
+                    </span>
                   </div>
                 </div>
               </motion.div>
@@ -253,15 +291,11 @@ const ProjectDetail = () => {
 
           {/* Sidebar */}
           <div className="space-y-8">
-            {/* Tools used */}
             <div className="content-block">
               <p className="font-mono text-xs text-ember tracking-widest uppercase mb-4">Tools Used</p>
               <div className="space-y-2">
                 {project.tools.map((tool) => (
-                  <div
-                    key={tool}
-                    className="flex items-center gap-3 font-mono text-sm text-slate-light"
-                  >
+                  <div key={tool} className="flex items-center gap-3 font-mono text-sm text-slate-light">
                     <span className="w-1.5 h-1.5 rounded-full bg-ember shrink-0" />
                     {tool}
                   </div>
@@ -269,7 +303,6 @@ const ProjectDetail = () => {
               </div>
             </div>
 
-            {/* Meta */}
             <div className="content-block border-t border-border-dim pt-8">
               <p className="font-mono text-xs text-ember tracking-widest uppercase mb-4">Details</p>
               <dl className="space-y-3">
@@ -289,19 +322,14 @@ const ProjectDetail = () => {
           </div>
         </div>
 
-        {/* ── Gallery — horizontal filmstrip + lightbox ── */}
+        {/* ── Gallery ── */}
         {project.gallery?.length > 0 && (
           <div className="mt-16" ref={galleryRef}>
             <div className="flex items-center justify-between mb-6">
-              <p className="font-mono text-xs text-ember tracking-widest uppercase">
-                Gallery
-              </p>
-              <span className="font-mono text-xs text-slate">
-                {project.gallery.length} images — scroll →
-              </span>
+              <p className="font-mono text-xs text-ember tracking-widest uppercase">Gallery</p>
+              <span className="font-mono text-xs text-slate">{project.gallery.length} images — scroll →</span>
             </div>
 
-            {/* Horizontal scrollable strip */}
             <div
               className="flex gap-3 overflow-x-auto pb-4"
               style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
@@ -323,10 +351,7 @@ const ProjectDetail = () => {
                   onClick={() => {
                     const el = document.getElementById("lightbox");
                     const img = document.getElementById("lightbox-img");
-                    if (el && img) {
-                      img.src = src;
-                      el.style.display = "flex";
-                    }
+                    if (el && img) { img.src = src; el.style.display = "flex"; }
                   }}
                 >
                   <img
@@ -335,11 +360,8 @@ const ProjectDetail = () => {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     loading="lazy"
                   />
-                  {/* View icon on hover */}
                   <div className="absolute inset-0 bg-void bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 flex items-center justify-center">
-                    <span className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs text-platinum border border-platinum px-3 py-1.5">
-                      view
-                    </span>
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs text-platinum border border-platinum px-3 py-1.5">view</span>
                   </div>
                 </motion.div>
               ))}
@@ -350,15 +372,11 @@ const ProjectDetail = () => {
               id="lightbox"
               className="fixed inset-0 z-50 bg-void bg-opacity-95 items-center justify-center"
               style={{ display: "none" }}
-              onClick={() => {
-                document.getElementById("lightbox").style.display = "none";
-              }}
+              onClick={() => { document.getElementById("lightbox").style.display = "none"; }}
             >
               <button
                 className="absolute top-6 right-6 font-mono text-sm text-slate hover:text-ember"
-                onClick={() => {
-                  document.getElementById("lightbox").style.display = "none";
-                }}
+                onClick={() => { document.getElementById("lightbox").style.display = "none"; }}
               >
                 ✕ close
               </button>
@@ -381,18 +399,14 @@ const ProjectDetail = () => {
           {prevProject ? (
             <Link to={`/project/${prevProject.id}`} className="group">
               <p className="font-mono text-xs text-slate mb-2">← Previous</p>
-              <p className="font-heading font-bold text-platinum group-hover:text-ember transition-colors">
-                {prevProject.title}
-              </p>
+              <p className="font-heading font-bold text-platinum group-hover:text-ember transition-colors">{prevProject.title}</p>
             </Link>
           ) : <div />}
 
           {nextProject ? (
             <Link to={`/project/${nextProject.id}`} className="group text-right">
               <p className="font-mono text-xs text-slate mb-2">Next →</p>
-              <p className="font-heading font-bold text-platinum group-hover:text-ember transition-colors">
-                {nextProject.title}
-              </p>
+              <p className="font-heading font-bold text-platinum group-hover:text-ember transition-colors">{nextProject.title}</p>
             </Link>
           ) : <div />}
         </div>

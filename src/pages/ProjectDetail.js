@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, Suspense } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { gsap } from "gsap";
@@ -198,8 +198,14 @@ const ProjectDetail = () => {
                 transition={{ duration: 0.8 }}
               >
                 <p className="font-mono text-xs text-slate tracking-widest uppercase mb-4">3D Model — Interactive</p>
-                <div className="relative border border-border-dim bg-card-bg overflow-hidden" style={{ height: "500px" }}>
-                  <ModelViewer modelPath={project.model} />
+               <div className="relative border border-border-dim bg-card-bg overflow-hidden" style={{ height: "500px" }}>
+                  <Suspense fallback={
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="font-mono text-xs text-slate animate-pulse">Loading model...</span>
+                    </div>
+                  }>
+                    <ModelViewer modelPath={project.model} />
+                  </Suspense>
                   <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
                     <span className="font-mono text-xs text-slate bg-void px-3 py-1.5 border border-border-dim">drag to rotate · scroll to zoom</span>
                   </div>

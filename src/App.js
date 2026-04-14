@@ -4,6 +4,13 @@ import { AnimatePresence } from "framer-motion";
 import Navbar from "./components/Navbar";
 import CustomCursor from "./components/CustomCursor";
 import Preloader from "./components/Preloader";
+import { useGLTF } from "@react-three/drei";
+import { projects } from "./data/projects";
+
+// Outside component — runs once when JS loads
+projects.forEach((p) => {
+  if (p.model) useGLTF.preload(p.model);
+});
 
 const HomePromise = import("./pages/Home");
 const DetailPromise = import("./pages/ProjectDetail-fine");

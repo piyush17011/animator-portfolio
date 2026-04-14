@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, Suspense, useMemo } from "react";
+import React, { useEffect, useRef, Suspense, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { gsap } from "gsap";
@@ -33,7 +33,48 @@ const DEFAULT_THEME = {
 
 
 
-// ── Float particles (default motionStyle: "float") ────────────────────────────
+// ── Inject CSS keyframe animation once ───────────────────────────────────────
+const STREAK_STYLE_ID = "wind-streak-keyframes";
+const injectStreakStyles = () => {
+  if (document.getElementById(STREAK_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = STREAK_STYLE_ID;
+  style.textContent = `
+    @keyframes windSlash { from { transform: translateX(-400px) skewY(-6deg); } to { transform: translateX(115vw) skewY(-6deg); } }
+    .wind-streak { position: absolute; left: 0; pointer-events: none; animation: windSlash linear infinite; will-change: transform; }
+    @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+    .gallery-card-visible { animation: fadeSlideIn 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+  `;
+  document.head.appendChild(style);
+};
+
+// ── Lightweight wind streaks — pure CSS, zero JS per-frame ───────────────────
+const WindStreaks = ({ color }) => {
+  useEffect(() => { injectStreakStyles(); }, []);
+  const streaks = useMemo(() => [
+    { top: "8%",  width: 260, height: 1, opacity: 0.22, duration: "4.2s", delay: "0s"   },
+    { top: "21%", width: 180, height: 2, opacity: 0.38, duration: "3.1s", delay: "1.4s" },
+    { top: "35%", width: 340, height: 1, opacity: 0.18, duration: "5.0s", delay: "0.7s" },
+    { top: "49%", width: 220, height: 3, opacity: 0.45, duration: "3.6s", delay: "2.1s" },
+    { top: "63%", width: 160, height: 1, opacity: 0.20, duration: "4.8s", delay: "0.3s" },
+    { top: "77%", width: 300, height: 2, opacity: 0.32, duration: "3.9s", delay: "1.8s" },
+    { top: "88%", width: 200, height: 1, opacity: 0.16, duration: "5.5s", delay: "0.9s" },
+    { top: "55%", width: 140, height: 2, opacity: 0.28, duration: "2.8s", delay: "3.0s" },
+  ], []);
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
+      {streaks.map((s, i) => (
+        <div key={i} className="wind-streak" style={{
+          top: s.top, width: s.width, height: s.height,
+          background: `linear-gradient(90deg, transparent 0%, ${color} 45%, ${color} 65%, transparent 100%)`,
+          opacity: s.opacity, animationDuration: s.duration, animationDelay: s.delay,
+        }} />
+      ))}
+    </div>
+  );
+};
+
+
 const FloatParticles = ({ color }) => {
   const particles = useMemo(() =>
     Array.from({ length: 6 }, (_, i) => ({
@@ -69,7 +110,88 @@ const FloatParticles = ({ color }) => {
 };
 
 const AtmosphereLayer = ({ theme }) => {
+  if (theme.motionStyle === "wind") return <WindStreaks color={theme.particle} />;
   return <FloatParticles color={theme.particle} />;
+};
+
+// ── Gallery sub-component with smooth scroll arrows ───────────────────────────
+const Gallery = ({ project, theme, galleryRef }) => {
+  const scrollRef = useRef(null);
+  const scroll = (dir) => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollBy({ left: dir * 420, behavior: "smooth" });
+  };
+  return (
+    <div className="mt-20" ref={galleryRef}>
+      <div className="flex items-center justify-between mb-6">
+        <p className="font-mono text-xs tracking-widest uppercase" style={{ color: theme.accent, fontFamily: theme.fontBody }}>Gallery</p>
+        <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.45 }}>{project.gallery.length} images</span>
+      </div>
+      <div className="relative">
+        {/* Left arrow */}
+        <button
+          onClick={() => scroll(-1)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-5 z-10 w-9 h-9 flex items-center justify-center text-lg"
+          style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.accentSoft }}
+          aria-label="Scroll left"
+        >‹</button>
+        {/* Right arrow */}
+        <button
+          onClick={() => scroll(1)}
+          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-5 z-10 w-9 h-9 flex items-center justify-center text-lg"
+          style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.accentSoft }}
+          aria-label="Scroll right"
+        >›</button>
+        <div
+          ref={scrollRef}
+          className="flex gap-3 overflow-x-auto pb-4"
+          style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollBehavior: "smooth", scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {project.gallery.map((src, i) => (
+            <div
+              key={i}
+              className="gallery-img shrink-0 overflow-hidden cursor-pointer relative group"
+              style={{
+                width: i === 0 ? "70vw" : "45vw",
+                maxWidth: i === 0 ? "600px" : "380px",
+                height: "260px",
+                scrollSnapAlign: "start",
+                background: theme.cardBg,
+                border: `1px solid ${theme.border}`,
+              }}
+              onClick={() => {
+                const el = document.getElementById("lightbox");
+                const img = document.getElementById("lightbox-img");
+                if (el && img) { img.src = src; el.style.display = "flex"; }
+              }}
+            >
+              <img
+                src={src}
+                alt={`${project.title} ${i + 1}`}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,0.6)" }}>
+                <span className="font-mono text-xs px-3 py-1.5" style={{ color: theme.accent, border: `1px solid ${theme.accent}` }}>view</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Lightbox */}
+      <div id="lightbox" className="fixed inset-0 z-50 items-center justify-center" style={{ display: "none", background: "rgba(0,0,0,0.96)" }}
+        onClick={() => { document.getElementById("lightbox").style.display = "none"; }}>
+        <button className="absolute top-6 right-6 font-mono text-sm" style={{ color: theme.accentSoft }}
+          onClick={() => { document.getElementById("lightbox").style.display = "none"; }}>
+          ✕ close
+        </button>
+        <img id="lightbox-img" src="" alt="Full size" className="max-w-full max-h-full object-contain"
+          style={{ maxHeight: "90vh", maxWidth: "90vw" }} onClick={(e) => e.stopPropagation()} />
+      </div>
+    </div>
+  );
 };
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -111,6 +233,7 @@ const ProjectDetail = () => {
 
   useEffect(() => {
     if (!project) return;
+    injectStreakStyles();
     const sections = contentRef.current?.querySelectorAll(".content-block");
     sections?.forEach((el, i) => {
       gsap.fromTo(el, { opacity: 0, y: 36 }, {
@@ -118,14 +241,18 @@ const ProjectDetail = () => {
         scrollTrigger: { trigger: el, start: "top 88%" }, delay: i * 0.08,
       });
     });
-    const imgs = galleryRef.current?.querySelectorAll(".gallery-img");
-    imgs?.forEach((el, i) => {
-      gsap.fromTo(el, { opacity: 0, scale: 0.96, y: 24 }, {
-        opacity: 1, scale: 1, y: 0, duration: 0.9, ease: "power3.out",
-        scrollTrigger: { trigger: el, start: "top 85%" }, delay: i * 0.1,
+    // Gallery uses IntersectionObserver — not GSAP — because items live inside overflow-x scroll
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("gallery-card-visible");
+          observer.unobserve(entry.target);
+        }
       });
-    });
-    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
+    }, { threshold: 0.15 });
+    const imgs = galleryRef.current?.querySelectorAll(".gallery-img");
+    imgs?.forEach((el) => { el.style.opacity = "0"; observer.observe(el); });
+    return () => { ScrollTrigger.getAll().forEach((t) => t.kill()); observer.disconnect(); };
   }, [project]);
 
   if (!project) {
@@ -189,10 +316,10 @@ const ProjectDetail = () => {
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}>
             <div className="flex items-center gap-4 mb-5">
               <span className="font-mono text-xs px-3 py-1 tracking-widest uppercase"
-                style={{ background: `${theme.accent}18`, color: theme.accent, border: `1px solid ${theme.accent}40`, fontFamily: theme.fontBody }}>
+                style={{ background: "rgba(0,0,0,0.55)", color: "#ffffff", border: `1px solid rgba(255,255,255,0.25)`, fontFamily: theme.fontBody }}>
                 {project.category}
               </span>
-              <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.6 }}>{project.year}</span>
+              <span className="font-mono text-xs" style={{ color: "#ffffff", opacity: 0.7 }}>{project.year}</span>
             </div>
             <h1 className="leading-none tracking-tight"
               style={{ fontFamily: theme.fontDisplay, color: theme.highlight, fontSize: "clamp(4rem,11vw,9rem)", textShadow: `0 0 40px ${theme.accent}88` }}>
@@ -314,47 +441,7 @@ const ProjectDetail = () => {
 
         {/* Gallery */}
         {project.gallery?.length > 0 && (
-          <div className="mt-20" ref={galleryRef}>
-            <div className="flex items-center justify-between mb-6">
-              <p className="font-mono text-xs tracking-widest uppercase" style={{ color: theme.accent, fontFamily: theme.fontBody }}>Gallery</p>
-              <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.45 }}>{project.gallery.length} images — scroll →</span>
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-4" style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}>
-              {project.gallery.map((src, i) => (
-                <motion.div
-                  key={i}
-                  className="gallery-img shrink-0 overflow-hidden cursor-pointer relative group"
-                  style={{ width: i === 0 ? "70vw" : "45vw", maxWidth: i === 0 ? "600px" : "380px", height: "260px", scrollSnapAlign: "start", background: theme.cardBg, border: `1px solid ${theme.border}` }}
-                  initial={{ opacity: 0, x: 30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.08, duration: 0.6 }}
-                  onClick={() => {
-                    const el = document.getElementById("lightbox");
-                    const img = document.getElementById("lightbox-img");
-                    if (el && img) { img.src = src; el.style.display = "flex"; }
-                  }}
-                >
-                  <img src={src} alt={`${project.title} ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center"
-                    style={{ background: "rgba(0,0,0,0.6)" }}>
-                    <span className="font-mono text-xs px-3 py-1.5" style={{ color: theme.accent, border: `1px solid ${theme.accent}` }}>view</span>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-
-            {/* Lightbox */}
-            <div id="lightbox" className="fixed inset-0 z-50 items-center justify-center" style={{ display: "none", background: "rgba(0,0,0,0.96)" }}
-              onClick={() => { document.getElementById("lightbox").style.display = "none"; }}>
-              <button className="absolute top-6 right-6 font-mono text-sm" style={{ color: theme.accentSoft }}
-                onClick={() => { document.getElementById("lightbox").style.display = "none"; }}>
-                ✕ close
-              </button>
-              <img id="lightbox-img" src="" alt="Full size" className="max-w-full max-h-full object-contain"
-                style={{ maxHeight: "90vh", maxWidth: "90vw" }} onClick={(e) => e.stopPropagation()} />
-            </div>
-          </div>
+          <Gallery project={project} theme={theme} galleryRef={galleryRef} />
         )}
       </div>
 

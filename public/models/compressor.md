@@ -1,0 +1,1 @@
+gltf-transform optimize jett.glb jett-optimized.glb --texture-compress webp

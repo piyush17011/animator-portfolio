@@ -5,8 +5,9 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import PageTransition from "../components/PageTransition";
 import Footer from "../components/Footer";
-import ModelViewer from "../components/ModelViewer";
 import { getById, projects } from "../data/projects";
+
+const ModelViewer = React.lazy(() => import("../components/ModelViewer"));
 
 gsap.registerPlugin(ScrollTrigger);
 

@@ -2,23 +2,13 @@ import React, { useRef, useEffect } from "react";
 import * as THREE from "three";
 import { gsap } from "gsap";
 
-/**
- * ThreeHero — Interactive 3D scene using vanilla Three.js
- *
- * Renders an abstract geometric sculpture made of:
- *  - Icosahedron core with wireframe overlay
- *  - Orbiting torus rings
- *  - Floating particle field
- *
- * Mouse parallax: scene tilts toward cursor position
- * GSAP floating loop: gentle bob on Y axis
- * Properly cleans up renderer + scene on unmount
- */
 const ThreeHero = () => {
   const mountRef = useRef(null);
-  const stateRef = useRef({});
 
   useEffect(() => {
+    // Don't render if ModelViewer is active (prevents WebGL context loss)
+    if (document.body.getAttribute("data-no-three")) return;
+
     const mount = mountRef.current;
     if (!mount) return;
 
@@ -32,9 +22,14 @@ const ThreeHero = () => {
     const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
     camera.position.set(0, 0, 5);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance",
+      failIfMajorPerformanceCaveat: false,
+    });
     renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setClearColor(0x000000, 0);
     mount.appendChild(renderer.domElement);
 
@@ -66,7 +61,7 @@ const ThreeHero = () => {
     const icosahedron = new THREE.Mesh(icoGeo, icoMat);
     scene.add(icosahedron);
 
-    // Wireframe overlay on ico
+    // Wireframe overlay
     const wireGeo = new THREE.IcosahedronGeometry(1.22, 1);
     const wireMat = new THREE.MeshBasicMaterial({
       color: 0xff4d1c,
@@ -107,7 +102,7 @@ const ThreeHero = () => {
       const r = 2.5 + Math.random() * 3;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
       positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       positions[i * 3 + 2] = r * Math.cos(phi);
     }
@@ -138,22 +133,29 @@ const ThreeHero = () => {
     });
 
     // ── Mouse parallax ──
-    const mouse = { x: 0, y: 0 };
+    const mouse  = { x: 0, y: 0 };
     const target = { x: 0, y: 0 };
 
     const onMouseMove = (e) => {
-      mouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
+      mouse.x =  (e.clientX / window.innerWidth  - 0.5) * 2;
       mouse.y = -(e.clientY / window.innerHeight - 0.5) * 2;
     };
     window.addEventListener("mousemove", onMouseMove);
 
-    // ── Animation Loop ──
+    // ── Animation loop — uses performance.now() instead of
+    //    deprecated THREE.Clock ──
     let rafId;
-    const clock = new THREE.Clock();
+    let elapsed  = 0;
+    let lastTime = performance.now();
 
     const animate = () => {
       rafId = requestAnimationFrame(animate);
-      const t = clock.getElapsedTime();
+
+      // Delta-time accumulator (replaces THREE.Clock)
+      const now = performance.now();
+      elapsed += (now - lastTime) / 1000;
+      lastTime = now;
+      const t = elapsed;
 
       // Smooth parallax
       target.x += (mouse.x * 0.4 - target.x) * 0.05;
@@ -163,11 +165,11 @@ const ThreeHero = () => {
 
       // Constant slow spin
       icosahedron.rotation.y = t * 0.15;
-      wireframe.rotation.y = t * 0.15;
-      wireframe.rotation.x = t * 0.08;
+      wireframe.rotation.y   = t * 0.15;
+      wireframe.rotation.x   = t * 0.08;
 
       // Rings orbiting
-      torus1.rotation.z = t * 0.3;
+      torus1.rotation.z =  t * 0.3;
       torus2.rotation.z = -t * 0.2;
 
       // Particles drift
@@ -190,18 +192,29 @@ const ThreeHero = () => {
     };
     window.addEventListener("resize", onResize);
 
-    // Store refs for cleanup
-    stateRef.current = { renderer, rafId, scene };
+    // ── Handle WebGL context loss gracefully ──
+    const onContextLost = (e) => {
+      e.preventDefault();
+      cancelAnimationFrame(rafId);
+    };
+    const onContextRestored = () => {
+      animate();
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
 
     return () => {
       cancelAnimationFrame(rafId);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("resize", onResize);
+      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
 
-      // Dispose all geometries and materials
+      // Dispose everything to free GPU memory
       [icoGeo, wireGeo, torusGeo1, torusGeo2, particleGeo].forEach((g) => g.dispose());
       [icoMat, wireMat, torusMat1, torusMat2, particleMat].forEach((m) => m.dispose());
       renderer.dispose();
+      renderer.forceContextLoss();
 
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement);

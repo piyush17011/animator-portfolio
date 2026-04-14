@@ -5,11 +5,18 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import PageTransition from "../components/PageTransition";
 import Footer from "../components/Footer";
+import ModelViewer from "../components/ModelViewer";
 import { getById, projects } from "../data/projects";
 
 gsap.registerPlugin(ScrollTrigger);
 
 const ProjectDetail = () => {
+  // Prevent ThreeHero from running while ModelViewer is active
+  // — avoids WebGL context loss on mobile (browsers cap active contexts)
+  useEffect(() => {
+    document.body.setAttribute("data-no-three", "true");
+    return () => document.body.removeAttribute("data-no-three");
+  }, []);
   const { id } = useParams();
   const navigate = useNavigate();
   const project = getById(id);
@@ -118,12 +125,13 @@ const ProjectDetail = () => {
 
       {/* ── Hero ── */}
       <section ref={heroRef} className="relative h-[70vh] overflow-hidden">
-        {/* Parallax image */}
+        {/* Parallax image — object-position keeps subject centered vertically */}
         <div className="hero-img absolute inset-0 scale-110">
           <img
             src={project.thumbnail}
             alt={project.title}
             className="w-full h-full object-cover"
+            style={{ objectPosition: "center 20%" }}
           />
         </div>
         {/* Dark vignette */}
@@ -178,6 +186,41 @@ const ProjectDetail = () => {
                 stakeholder feedback to ensure the final result met both artistic and functional goals.
               </p>
             </div>
+
+            {/* 3D Model Viewer */}
+            {project.model && (
+              <motion.div
+                className="mt-12 content-block"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8 }}
+              >
+                <p className="font-mono text-xs text-slate tracking-widest uppercase mb-4">3D Model — Interactive</p>
+                <div className="relative border border-border-dim bg-card-bg overflow-hidden" style={{ height: "500px" }}>
+                  <ModelViewer modelPath={project.model} />
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
+                    <span className="font-mono text-xs text-slate bg-void px-3 py-1.5 border border-border-dim">drag to rotate · scroll to zoom</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {!project.model && project.id === "jett-valorant" && (
+              <motion.div
+                className="mt-12 content-block"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8 }}
+              >
+                <p className="font-mono text-xs text-slate tracking-widest uppercase mb-4">3D Model — Coming Soon</p>
+                <div className="relative border border-dashed border-ember border-opacity-30 bg-card-bg flex flex-col items-center justify-center gap-4" style={{ height: "300px" }}>
+                  <motion.div className="w-16 h-16 border-2 border-ember" animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }} style={{ borderRadius: "4px" }} />
+                  <p className="font-mono text-xs text-slate tracking-widest">Interactive 3D viewer coming soon</p>
+                </div>
+              </motion.div>
+            )}
 
             {/* Video embed if available */}
             {project.video && (
@@ -239,27 +282,87 @@ const ProjectDetail = () => {
           </div>
         </div>
 
-        {/* ── Gallery ── */}
+        {/* ── Gallery — horizontal filmstrip + lightbox ── */}
         {project.gallery?.length > 0 && (
-          <div className="mt-20" ref={galleryRef}>
-            <p className="font-mono text-xs text-ember tracking-widest uppercase mb-8">Gallery</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="mt-16" ref={galleryRef}>
+            <div className="flex items-center justify-between mb-6">
+              <p className="font-mono text-xs text-ember tracking-widest uppercase">
+                Gallery
+              </p>
+              <span className="font-mono text-xs text-slate">
+                {project.gallery.length} images — scroll →
+              </span>
+            </div>
+
+            {/* Horizontal scrollable strip */}
+            <div
+              className="flex gap-3 overflow-x-auto pb-4"
+              style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
+            >
               {project.gallery.map((src, i) => (
-                <div
+                <motion.div
                   key={i}
-                  className={`gallery-img overflow-hidden bg-card-bg border border-border-dim ${
-                    i === 0 ? "md:col-span-2" : ""
-                  }`}
+                  className="gallery-img shrink-0 overflow-hidden bg-card-bg border border-border-dim cursor-pointer relative group"
+                  style={{
+                    width: i === 0 ? "70vw" : "45vw",
+                    maxWidth: i === 0 ? "600px" : "380px",
+                    height: "260px",
+                    scrollSnapAlign: "start",
+                  }}
+                  initial={{ opacity: 0, x: 30 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.08, duration: 0.6 }}
+                  onClick={() => {
+                    const el = document.getElementById("lightbox");
+                    const img = document.getElementById("lightbox-img");
+                    if (el && img) {
+                      img.src = src;
+                      el.style.display = "flex";
+                    }
+                  }}
                 >
                   <img
                     src={src}
-                    alt={`${project.title} gallery ${i + 1}`}
-                    className="w-full object-cover hover:scale-105 transition-transform duration-700"
-                    style={{ height: i === 0 ? "420px" : "280px" }}
+                    alt={`${project.title} ${i + 1}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     loading="lazy"
                   />
-                </div>
+                  {/* View icon on hover */}
+                  <div className="absolute inset-0 bg-void bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 flex items-center justify-center">
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs text-platinum border border-platinum px-3 py-1.5">
+                      view
+                    </span>
+                  </div>
+                </motion.div>
               ))}
+            </div>
+
+            {/* Lightbox */}
+            <div
+              id="lightbox"
+              className="fixed inset-0 z-50 bg-void bg-opacity-95 items-center justify-center"
+              style={{ display: "none" }}
+              onClick={() => {
+                document.getElementById("lightbox").style.display = "none";
+              }}
+            >
+              <button
+                className="absolute top-6 right-6 font-mono text-sm text-slate hover:text-ember"
+                onClick={() => {
+                  document.getElementById("lightbox").style.display = "none";
+                }}
+              >
+                ✕ close
+              </button>
+              <img
+                id="lightbox-img"
+                src=""
+                alt="Full size"
+                className="max-w-full max-h-full object-contain"
+                style={{ maxHeight: "90vh", maxWidth: "90vw" }}
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
           </div>
         )}

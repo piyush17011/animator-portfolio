@@ -143,8 +143,7 @@ const Home = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 3.6, duration: 0.7 }}
             >
-              I craft motion experiences that blur the line between art and technology —
-              from cinematic title sequences to real-time client projects.
+             I build 3D worlds and bring them to life — from sculpting characters to animating and finishing them for the screen.
             </motion.p>
 
             {/* CTAs */}
@@ -301,7 +300,7 @@ const Home = () => {
               <span className="text-gradient">VISIBLE</span>
             </h2>
             <p className="font-body text-slate leading-relaxed mb-5 reveal-para">
-              I'm Omkar Bane — a motion designer and animator with 1+ years of experience
+              I'm Omkar Bane — a 3D model designer and animator with 1+ years of experience
               crafting visual stories for brands, studios, and galleries worldwide. My work
               lives at the intersection of technology and emotion.
             </p>
@@ -374,8 +373,9 @@ const Home = () => {
               </p>
               <div className="flex flex-wrap gap-2">
                 {[
-                  "Adobe After Effects", "Maya",
-                  "Blender","Adobe Illustrator","Adobe Premiere Pro"
+                  "Maya","ZBrush",
+                  "Blender","Adobe After Effects","Adobe Premiere Pro"
+                  ,"Adobe Substance Painter","Adobe Illustrator","Adobe Photoshop"
                 ].map((tool) => (
                   <motion.span
                     key={tool}
@@ -411,19 +411,19 @@ const Home = () => {
 
           <div className="flex flex-col items-center justify-center gap-4 w-full px-4">
             <a
-              href="mailto:hello@OMKARBANE.com"
+              href="mailto:omkarbane378@gmail.com"
               className="group inline-flex items-center gap-3 px-10 py-5 bg-ember text-void font-heading font-bold text-sm tracking-widest uppercase hover:bg-ember-glow transition-colors duration-300"
             >
-              omkarbane@gmail.com
+              omkarbane378@gmail.com
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="group-hover:translate-x-1 transition-transform">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </a>
             <a
-              href="tel:+9082420911"
+              href="tel:+91 8369743080"
               className="font-mono text-sm text-slate hover:text-platinum transition-colors duration-200"
             >
-              +91 9082420911
+              +91 8369743080
             </a>
           </div>
 

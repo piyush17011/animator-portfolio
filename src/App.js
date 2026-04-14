@@ -6,7 +6,7 @@ import CustomCursor from "./components/CustomCursor";
 import Preloader from "./components/Preloader";
 
 const HomePromise = import("./pages/Home");
-const DetailPromise = import("./pages/ProjectDetail");
+const DetailPromise = import("./pages/ProjectDetail-fine");
 
 const Home = lazy(() => HomePromise);
 const ProjectDetail = lazy(() => DetailPromise);

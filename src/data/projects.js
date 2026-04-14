@@ -10,7 +10,7 @@ export const projects = [
     color: "#4DD8FF",
     thumbnail: "/projects/jett/jett-4.jpeg",
     video: "/projects/jett/jett-video.mp4",
-    model: "/models/jett-optimized.glb", // swap to "/models/jett.glb" when ready
+    model: "/models/jett-optimized.glb",
     gallery: [
       "/projects/jett/jett-6.jpeg",
       "/projects/jett/jett-1.jpeg",
@@ -19,7 +19,84 @@ export const projects = [
       "/projects/jett/jett-7.jpeg",
     ],
     featured: true,
+
+    // ── Per-project theme ─────────────────────────────────────────────────────
+    // Each project can define its own full atmosphere.
+    // ProjectDetail reads this and applies it via CSS variables + bg effects.
+    theme: {
+      // Background: void black with barely-there deep teal undertone
+      bg: "linear-gradient(160deg, #000608 0%, #010d14 35%, #000a10 70%, #000507 100%)",
+      // Floating atmospheric layer
+      atmosphere: "rgba(77, 216, 255, 0.04)",
+      // Primary accent — Jett electric cyan, full saturation
+      accent: "#00D4FF",
+      // Secondary accent — cooler ice white
+      accentSoft: "#7ee8ff",
+      // Text highlight — near-white with cold tint
+      highlight: "#c8f4ff",
+      // Hero overlay — crushes shadows hard, keeps highlights
+     
+      // Particle / wind streak color
+      particle: "#00D4FF",
+      // Font pairing
+      fontDisplay: "'Rajdhani', sans-serif",
+      fontBody: "'DM Sans', sans-serif",
+      fonts: "https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=DM+Sans:ital,wght@0,300;0,400;1,300&display=swap",
+      // Animation style: includes knives
+      motionStyle: "wind",
+      // Card/panel background — near-opaque black with cyan tint
+      cardBg: "rgba(0, 10, 16, 0.92)",
+      // Border color — more visible cyan line
+      border: "rgba(0, 212, 255, 0.22)",
+      // Glow intensity for shadows/halos
+      glowStrong: "rgba(0, 212, 255, 0.55)",
+      glowSoft: "rgba(0, 212, 255, 0.12)",
+    },
   },
+
+  // ── Future projects — add a `theme` object to each ────────────────────────
+  // Example theme keys for reference when you uncomment these:
+  //
+  // {
+  //   id: "fluid-dreams",
+  //   ...
+  //   theme: {
+  //     bg: "linear-gradient(160deg, #020818 0%, #05102e 100%)",
+  //     accent: "#4D9FFF",
+  //     accentSoft: "#a0c8ff",
+  //     highlight: "#dceeff",
+  //     heroOverlay: "linear-gradient(to bottom, rgba(2,8,24,0.1) 0%, rgba(2,8,24,0.92) 100%)",
+  //     atmosphere: "rgba(77,159,255,0.05)",
+  //     particle: "#4D9FFF",
+  //     fontDisplay: "'Unbounded', sans-serif",
+  //     fontBody: "'Instrument Sans', sans-serif",
+  //     fonts: "https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Instrument+Sans:wght@300;400&display=swap",
+  //     motionStyle: "float",
+  //     cardBg: "rgba(2, 10, 28, 0.85)",
+  //     border: "rgba(77,159,255,0.18)",
+  //   },
+  // },
+  //
+  // {
+  //   id: "echo-chamber",
+  //   ...
+  //   theme: {
+  //     bg: "linear-gradient(160deg, #0d0014 0%, #1a0028 100%)",
+  //     accent: "#B44DFF",
+  //     accentSoft: "#dda0ff",
+  //     highlight: "#f0d8ff",
+  //     heroOverlay: "linear-gradient(to bottom, rgba(13,0,20,0.1) 0%, rgba(13,0,20,0.92) 100%)",
+  //     atmosphere: "rgba(180,77,255,0.05)",
+  //     particle: "#B44DFF",
+  //     fontDisplay: "'Bebas Neue', sans-serif",
+  //     fontBody: "'Lato', sans-serif",
+  //     fonts: "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lato:wght@300;400&display=swap",
+  //     motionStyle: "pulse",
+  //     cardBg: "rgba(13, 2, 22, 0.85)",
+  //     border: "rgba(180,77,255,0.18)",
+  //   },
+  // },
+
   // {
   //   id: "fluid-dreams",
   //   title: "Fluid Dreams",

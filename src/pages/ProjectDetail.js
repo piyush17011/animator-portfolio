@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, Suspense, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useInView } from "react-intersection-observer";
@@ -29,101 +29,14 @@ const DEFAULT_THEME = {
   border: "rgba(255,75,28,0.18)",
 };
 
-// ── Wind slashes — thick, very visible ───────────────────────────────────────
-// ── Wind slashes — sit behind content (zIndex 1) ─────────────────────────────
-const WindStreaks = ({ color }) => {
-  const streaks = useMemo(() =>
-    Array.from({ length: 22 }, (_, i) => ({
-      id: i,
-      top: `${3 + (i / 22) * 94}%`,
-      width: `${120 + Math.random() * 340}px`,
-      height: i % 5 === 0 ? "3px" : i % 3 === 0 ? "2px" : "1px",
-      opacity: i % 5 === 0 ? 0.55 : i % 3 === 0 ? 0.32 : 0.18,
-      duration: 1.6 + Math.random() * 2.8,
-      delay: Math.random() * 6,
-      skew: -4 + Math.random() * -10,
-      blur: i % 5 === 0 ? "1px" : "0px",
-    })), []
-  );
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
-      {streaks.map((s) => (
-        <motion.div
-          key={s.id}
-          style={{
-            position: "absolute",
-            top: s.top,
-            left: "-340px",
-            width: s.width,
-            height: s.height,
-            background: `linear-gradient(90deg, transparent 0%, ${color} 40%, ${color} 60%, transparent 100%)`,
-            opacity: s.opacity,
-            transform: `skewY(${s.skew}deg)`,
-            filter: `blur(${s.blur}) drop-shadow(0 0 4px ${color})`,
-          }}
-          animate={{ x: ["0vw", "140vw"] }}
-          transition={{ duration: s.duration, delay: s.delay, repeat: Infinity, ease: "linear" }}
-        />
-      ))}
-    </div>
-  );
-};
 
-// ── Jett kunai knives — behind content (zIndex 1) ────────────────────────────
-const KnifeSVG = ({ color, size = 36 }) => (
-  <svg width={size} height={size * 3.2} viewBox="0 0 24 78" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2 L16 28 L12 32 L8 28 Z" fill={color} opacity="0.9"/>
-    <path d="M12 2 L16 28 L12 20 Z" fill="white" opacity="0.35"/>
-    <rect x="7" y="31" width="10" height="3" rx="1" fill={color} opacity="0.7"/>
-    <rect x="9.5" y="34" width="5" height="18" rx="2" fill={color} opacity="0.5"/>
-    <line x1="9.5" y1="39" x2="14.5" y2="39" stroke={color} strokeWidth="1" opacity="0.8"/>
-    <line x1="9.5" y1="44" x2="14.5" y2="44" stroke={color} strokeWidth="1" opacity="0.8"/>
-    <line x1="9.5" y1="49" x2="14.5" y2="49" stroke={color} strokeWidth="1" opacity="0.8"/>
-    <ellipse cx="12" cy="54" rx="3.5" ry="2.5" fill={color} opacity="0.6"/>
-    <path d="M12 54 L11 70 L12 78 L13 70 Z" fill={color} opacity="0.2"/>
-  </svg>
-);
 
-const JettKnives = ({ color }) => {
-  const knives = useMemo(() =>
-    Array.from({ length: 3 }, (_, i) => ({
-      id: i,
-      top: `${20 + i * 28}%`,
-      size: 20 + Math.random() * 16,
-      opacity: 0.15 + Math.random() * 0.18,
-      duration: 3.5 + Math.random() * 3.5,
-      delay: i * 2.8 + Math.random() * 2,
-      tilt: -20 + Math.random() * 40,
-      spinAmount: 180 + Math.random() * 270,
-    })), []
-  );
 
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
-      {knives.map((k) => (
-        <motion.div
-          key={k.id}
-          style={{
-            position: "absolute",
-            top: k.top,
-            left: "-80px",
-            opacity: k.opacity,
-            filter: `drop-shadow(0 0 4px ${color}88)`,
-          }}
-          animate={{ x: ["0vw", "115vw"], rotate: [k.tilt, k.tilt + k.spinAmount] }}
-          transition={{ duration: k.duration, delay: k.delay, repeat: Infinity, ease: "linear" }}
-        >
-          <KnifeSVG color={color} size={k.size} />
-        </motion.div>
-      ))}
-    </div>
-  );
-};
 
 // ── Float particles (default motionStyle: "float") ────────────────────────────
 const FloatParticles = ({ color }) => {
   const particles = useMemo(() =>
-    Array.from({ length: 18 }, (_, i) => ({
+    Array.from({ length: 6 }, (_, i) => ({
       id: i,
       x: `${Math.random() * 100}%`,
       size: 1 + Math.random() * 2.5,
@@ -156,14 +69,7 @@ const FloatParticles = ({ color }) => {
 };
 
 const AtmosphereLayer = ({ theme }) => {
-  if (theme.motionStyle === "wind") return (
-    <>
-      <WindStreaks color={theme.particle} />
-      <JettKnives color={theme.particle} />
-    </>
-  );
-  if (theme.motionStyle === "float") return <FloatParticles color={theme.particle} />;
-  return null;
+  return <FloatParticles color={theme.particle} />;
 };
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -196,9 +102,6 @@ const ProjectDetail = () => {
   const heroRef = useRef(null);
   const contentRef = useRef(null);
   const galleryRef = useRef(null);
-
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
-  const heroY = useTransform(scrollYProgress, [0, 1], ["0%", "25%"]);
 
   const { ref: modelRef, inView: modelInView } = useInView({ triggerOnce: true, threshold: 0.1 });
 
@@ -266,9 +169,9 @@ const ProjectDetail = () => {
 
       {/* Hero */}
       <section ref={heroRef} className="relative h-[75vh] overflow-hidden" style={{ zIndex: 2 }}>
-        <motion.div className="absolute inset-0 scale-110" style={{ y: heroY }}>
+        <div className="absolute inset-0 scale-110">
           <img src={project.thumbnail} alt={project.title} className="w-full h-full object-cover" style={{ objectPosition: "center 20%" }} />
-        </motion.div>
+        </div>
         {/* Dark overlay — crush the bright sky */}
         <div className="absolute inset-0" style={{ background: theme.heroOverlay }} />
         {/* Extra top darkener so sky doesn't dominate */}
@@ -292,7 +195,7 @@ const ProjectDetail = () => {
               <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.6 }}>{project.year}</span>
             </div>
             <h1 className="leading-none tracking-tight"
-              style={{ fontFamily: theme.fontDisplay, color: theme.highlight, fontSize: "clamp(4rem,11vw,9rem)", textShadow: `0 0 40px ${theme.accent}, 0 0 80px ${theme.accent}99, 0 0 160px ${theme.accent}44` }}>
+              style={{ fontFamily: theme.fontDisplay, color: theme.highlight, fontSize: "clamp(4rem,11vw,9rem)", textShadow: `0 0 40px ${theme.accent}88` }}>
               {project.title}
             </h1>
             <motion.div className="mt-4 h-px"

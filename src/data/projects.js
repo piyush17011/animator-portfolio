@@ -53,6 +53,61 @@ export const projects = [
       glowSoft: "rgba(0, 212, 255, 0.12)",
     },
   },
+ {
+    id: "Male",
+    title: "Male",
+    category: "3D Character Modeling",
+    year: "2025",
+    description: "A male character animation.",
+    shortDesc: "A 3D Male Character",
+    tools: ["Maya", "Blender", "After Substance Painter", "Adobe After Effect"],
+    color: "#4DD8FF",
+    thumbnail: "/projects/jett/jett-4.jpeg",
+    video: "/projects/jett/jett-video.mp4",
+    model: "/models/male-optimized.glb",
+    gallery: [
+      "/projects/jett/jett-6.jpeg",
+      "/projects/jett/jett-1.jpeg",
+      "/projects/jett/jett-3.jpg",
+      "/projects/jett/jett-5.jpg",
+      "/projects/jett/jett-7.jpeg",
+    ],
+    featured: true,
+
+    // ── Per-project theme ─────────────────────────────────────────────────────
+    // Each project can define its own full atmosphere.
+    // ProjectDetail reads this and applies it via CSS variables + bg effects.
+    theme: {
+      // Background: void black with barely-there deep teal undertone
+      bg: "linear-gradient(160deg, #000608 0%, #010d14 35%, #000a10 70%, #000507 100%)",
+      // Floating atmospheric layer
+      atmosphere: "rgba(77, 216, 255, 0.04)",
+      // Primary accent — Jett electric cyan, full saturation
+      accent: "#00D4FF",
+      // Secondary accent — cooler ice white
+      accentSoft: "#7ee8ff",
+      // Text highlight — near-white with cold tint
+      highlight: "#c8f4ff",
+      // Hero overlay — crushes shadows hard, keeps highlights
+     
+      // Particle / wind streak color
+      particle: "#00D4FF",
+      // Font pairing
+      fontDisplay: "'Rajdhani', sans-serif",
+      fontBody: "'DM Sans', sans-serif",
+      fonts: "https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=DM+Sans:ital,wght@0,300;0,400;1,300&display=swap",
+      // Animation style: includes knives
+      motionStyle: "wind",
+      // Card/panel background — near-opaque black with cyan tint
+      cardBg: "rgba(0, 10, 16, 0.92)",
+      // Border color — more visible cyan line
+      border: "rgba(0, 212, 255, 0.22)",
+      // Glow intensity for shadows/halos
+      glowStrong: "rgba(0, 212, 255, 0.55)",
+      glowSoft: "rgba(0, 212, 255, 0.12)",
+    },
+  },
+
 
   // ── Future projects — add a `theme` object to each ────────────────────────
   // Example theme keys for reference when you uncomment these:

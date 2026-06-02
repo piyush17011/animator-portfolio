@@ -3,7 +3,6 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, OrbitControls, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
-// ── Model component ───────────────────────────────────────────────────────────
 const Model = ({ url }) => {
   const absoluteUrl = url.startsWith("http")
     ? url
@@ -11,28 +10,69 @@ const Model = ({ url }) => {
   const { scene } = useGLTF(absoluteUrl);
   const groupRef = useRef();
   const { mouse, camera } = useThree();
+  const fitted = useRef(false);
 
   useEffect(() => {
-    if (!groupRef.current) return;
-    const box = new THREE.Box3().setFromObject(groupRef.current);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    groupRef.current.position.set(-center.x, -center.y, -center.z);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim > 0) {
-      const scale = 2 / maxDim;
-      groupRef.current.scale.setScalar(scale);
-    }
-    const fovRad = (45 * Math.PI) / 180;
-    const fitDist = (2 / (2 * Math.tan(fovRad / 2))) * 1.4;
-    camera.position.set(0, 0, fitDist);
-    camera.near = 0.01;
-    camera.far = fitDist * 200;
-    camera.updateProjectionMatrix();
-  }, [scene, camera]);
+    fitted.current = false;
+  }, [scene, url]);
 
   useFrame(() => {
     if (!groupRef.current) return;
+
+    if (!fitted.current) {
+      fitted.current = true;
+
+      // Step 1: reset everything
+      groupRef.current.scale.set(1, 1, 1);
+      groupRef.current.position.set(0, 0, 0);
+      groupRef.current.rotation.set(0, 0, 0);
+      groupRef.current.updateMatrixWorld(true);
+
+      // Step 2: measure raw mesh bounds
+      const box = new THREE.Box3();
+      groupRef.current.traverse((child) => {
+        if (child.isMesh && child.visible) {
+          box.union(new THREE.Box3().setFromObject(child));
+        }
+      });
+
+      if (box.isEmpty()) return;
+
+      const size = box.getSize(new THREE.Vector3());
+
+      // Step 3: scale to fit 2 units
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim > 0) groupRef.current.scale.setScalar(2 / maxDim);
+
+      // Step 4: re-measure AFTER scaling so centering is in scaled space
+      groupRef.current.updateMatrixWorld(true);
+      const scaledBox = new THREE.Box3();
+      groupRef.current.traverse((child) => {
+        if (child.isMesh && child.visible) {
+          scaledBox.union(new THREE.Box3().setFromObject(child));
+        }
+      });
+
+      const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+
+      // Step 5: center on scaled bounds
+      groupRef.current.position.set(
+        -scaledCenter.x,
+        -scaledCenter.y,
+        -scaledCenter.z
+      );
+
+      // Step 6: fit camera
+      const fovRad = (camera.fov * Math.PI) / 180;
+      const fitDist = (1 / Math.tan(fovRad / 2)) * 1.6;
+
+      camera.position.set(0, 0, fitDist);
+      camera.near = fitDist * 0.001;
+      camera.far = fitDist * 100;
+      camera.lookAt(0, 0, 0);
+      camera.updateProjectionMatrix();
+    }
+
     groupRef.current.rotation.y +=
       (mouse.x * 0.3 - groupRef.current.rotation.y) * 0.02;
     groupRef.current.rotation.x +=
@@ -75,8 +115,6 @@ class GLBErrorBoundary extends React.Component {
 }
 
 const ModelViewer = ({ modelPath }) => {
-  // ── Preload is called at the module level in src/preload.js —
-  //    no need to repeat it here on every mount.
   return (
     <div className="relative w-full h-full">
       <GLBErrorBoundary>
@@ -88,11 +126,8 @@ const ModelViewer = ({ modelPath }) => {
             powerPreference: "high-performance",
             failIfMajorPerformanceCaveat: false,
           }}
-          // Cap DPR at 1.5 — no visual benefit higher for a model viewer
           dpr={[1, 1.5]}
-          // frameloop="demand" renders only when something changes (mouse/orbit)
-          // which eliminates idle GPU usage between interactions
-          frameloop="demand"
+          frameloop="always"
           style={{ touchAction: "pan-y" }}
         >
           <ambientLight intensity={2.5} />

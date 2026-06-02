@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import ThreeHero from "../components/ThreeHero";
+import SkillsCarousel from "../components/SkillsCarousel";
 import ProjectCard from "../components/ProjectCard";
 import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
@@ -196,21 +196,21 @@ const Home = () => {
             </motion.div>
           </div>
 
-          {/* ── Right: Three.js Hero ── */}
+          {/* ── Right: Skills Carousel ── */}
           <motion.div
             className="relative h-[280px] sm:h-[360px] lg:h-[600px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 3.0, duration: 1.2 }}
           >
-            {/* Glow halo behind canvas */}
+            {/* Glow halo behind carousel */}
             <div
               className="absolute inset-0 rounded-full pointer-events-none"
               style={{
                 background: "radial-gradient(circle, rgba(255,77,28,0.12) 0%, transparent 70%)",
               }}
             />
-            <ThreeHero />
+            <SkillsCarousel />
           </motion.div>
         </div>
       </section>

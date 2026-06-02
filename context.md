@@ -1,5 +1,5 @@
 # Project context: omkar-portfolio
-Generated: 2026-06-02 · 31 files · stripped: comments, blank_lines, console_logs
+Generated: 2026-06-02 · 33 files · stripped: comments, blank_lines, console_logs
 
 ---
 
@@ -17,16 +17,17 @@ omkar-portfolio/
 ├── public/
 │   ├── index.html
 │   ├── manifest.json
-│   └── models/
-│       └── compressor.md
+│   ├── models/
+│   │   └── compressor.md
+│   └── sw.js
 ├── src/
 │   ├── App.css
 │   ├── App.js
 │   ├── App.test.js
 │   ├── components/
+│   │   ├── AtmosphereLayer.js
 │   │   ├── CustomCursor.js
 │   │   ├── Footer.js
-│   │   ├── ModelViewer-fine.js
 │   │   ├── ModelViewer.js
 │   │   ├── Navbar.js
 │   │   ├── PageTransition.js
@@ -43,6 +44,7 @@ omkar-portfolio/
 │   ├── pages/
 │   │   ├── Home.js
 │   │   └── ProjectDetail.js
+│   ├── preload.js
 │   ├── reportWebVitals.js
 │   └── setupTests.js
 ├── tailwind.config.js
@@ -983,10 +985,12 @@ module.exports = {
     <meta name="theme-color" content="#050508" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" href="/models/jett-txt.glb" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/models/male-optimized.glb" as="fetch" crossorigin="anonymous" />
     <title>Omkar Bane — Motion Designer & Animator</title>
-<meta name="description" content="Omkar Bane — Motion Designer and Animator crafting cinematic experiences, 3D animation, and visual effects." />
-<meta property="og:title" content="Omkar Bane — Motion Designer" />
-<meta property="og:description" content="Portfolio of Omkar Bane, motion designer and animator." />
+    <meta name="description" content="Omkar Bane — Motion Designer and Animator crafting cinematic experiences, 3D animation, and visual effects." />
+    <meta property="og:title" content="Omkar Bane — Motion Designer" />
+    <meta property="og:description" content="Portfolio of Omkar Bane, motion designer and animator." />
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -1029,6 +1033,54 @@ module.exports = {
 
 ```md
 gltf-transform optimize jett.glb jett-optimized.glb --texture-compress webp
+```
+
+### `public/sw.js`
+
+```js
+const CACHE_NAME = "models-v1";
+const MODEL_EXTS = [".glb", ".gltf", ".bin"];
+
+self.addEventListener("install", () => self.skipWaiting());
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME)
+          .map((k) => caches.delete(k))
+      )
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (e) => {
+  const url = new URL(e.request.url);
+  const isModel = MODEL_EXTS.some((ext) => url.pathname.endsWith(ext));
+  if (!isModel) return; 
+
+  e.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(e.request);
+      if (cached) {
+        fetch(e.request)
+          .then((fresh) => {
+            if (fresh.ok) cache.put(e.request, fresh.clone());
+          })
+          .catch(() => {}); 
+        return cached;
+      }
+
+      const response = await fetch(e.request);
+      if (response.ok) {
+        cache.put(e.request, response.clone());
+      }
+      return response;
+    })
+  );
+});
 ```
 
 ### `src/App.css`
@@ -1075,38 +1127,9 @@ gltf-transform optimize jett.glb jett-optimized.glb --texture-compress webp
 import React, { Suspense, lazy, useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
-import { Canvas } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
 import Navbar from "./components/Navbar";
 import CustomCursor from "./components/CustomCursor";
 import Preloader from "./components/Preloader";
-import { projects } from "./data/projects";
-const ModelPreloadMesh = ({ url }) => {
-  useGLTF(url);
-  return null;
-};
-const ModelPreloader = () => (
-  <div
-    style={{
-      position: "fixed",
-      width: 1,
-      height: 1,
-      opacity: 0,
-      pointerEvents: "none",
-      zIndex: -1,
-    }}
-  >
-    <Canvas>
-      <Suspense fallback={null}>
-        {projects
-          .filter((p) => p.model)
-          .map((p) => (
-            <ModelPreloadMesh key={p.id} url={p.model} />
-          ))}
-      </Suspense>
-    </Canvas>
-  </div>
-);
 const HomePromise = import("./pages/Home");
 const DetailPromise = import("./pages/ProjectDetail");
 const Home = lazy(() => HomePromise);
@@ -1142,18 +1165,15 @@ function App() {
   }, [chunksReady, preloaderDone]);
   return (
     <>
-      {}
       {!showApp && (
         <Preloader
           chunksReady={chunksReady}
           onComplete={() => setPreloaderDone(true)}
         />
       )}
-      {}
       <div style={{ visibility: showApp ? "visible" : "hidden" }}>
         <Router>
           {}
-          <ModelPreloader />
           <CustomCursor />
           <Navbar />
           <Suspense fallback={null}>
@@ -1177,6 +1197,200 @@ test('renders learn react link', () => {
   const linkElement = screen.getByText(/learn react/i);
   expect(linkElement).toBeInTheDocument();
 });
+```
+
+### `src/components/AtmosphereLayer.js`
+
+```js
+import React, { useMemo, useEffect } from "react";
+import { motion } from "framer-motion";
+
+let stylesInjected = false;
+const injectStreakStyles = () => {
+  if (stylesInjected) return;
+  stylesInjected = true;
+  const style = document.createElement("style");
+  style.textContent = `
+    @keyframes streak-fly {
+      from { transform: translateX(-340px) skewY(var(--skew)); }
+      to   { transform: translateX(140vw)  skewY(var(--skew)); }
+    }
+    .wind-streak {
+      position: absolute;
+      left: 0;
+      animation: streak-fly linear infinite;
+      animation-duration: var(--dur);
+      animation-delay: var(--delay);
+      will-change: transform;
+    }
+  `;
+  document.head.appendChild(style);
+};
+
+const WindStreaks = ({ color }) => {
+  useEffect(() => { injectStreakStyles(); }, []);
+
+  const streaks = useMemo(() =>
+    Array.from({ length: 22 }, (_, i) => ({
+      id: i,
+      top: `${3 + (i / 22) * 94}%`,
+      width: `${120 + Math.random() * 340}px`,
+      height: i % 5 === 0 ? "3px" : i % 3 === 0 ? "2px" : "1px",
+      opacity: i % 5 === 0 ? 0.55 : i % 3 === 0 ? 0.32 : 0.18,
+      duration: `${(1.6 + Math.random() * 2.8).toFixed(2)}s`,
+      delay: `${(Math.random() * 6).toFixed(2)}s`,
+      skew: `${(-4 + Math.random() * -10).toFixed(1)}deg`,
+      blur: i % 5 === 0 ? "1px" : "0px",
+    })), []
+  );
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        pointerEvents: "none",
+        overflow: "hidden",
+        zIndex: 1,
+        willChange: "transform", 
+      }}
+    >
+      {streaks.map((s) => (
+        <div
+          key={s.id}
+          className="wind-streak"
+          style={{
+            top: s.top,
+            width: s.width,
+            height: s.height,
+            background: `linear-gradient(90deg, transparent 0%, ${color} 40%, ${color} 60%, transparent 100%)`,
+            opacity: s.opacity,
+            filter: `blur(${s.blur}) drop-shadow(0 0 4px ${color})`,
+            "--dur": s.duration,
+            "--delay": s.delay,
+            "--skew": s.skew,
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const KnifeSVG = ({ color, size = 36 }) => (
+  <svg width={size} height={size * 3.2} viewBox="0 0 24 78" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2 L16 28 L12 32 L8 28 Z" fill={color} opacity="0.9"/>
+    <path d="M12 2 L16 28 L12 20 Z" fill="white" opacity="0.35"/>
+    <rect x="7" y="31" width="10" height="3" rx="1" fill={color} opacity="0.7"/>
+    <rect x="9.5" y="34" width="5" height="18" rx="2" fill={color} opacity="0.5"/>
+    <line x1="9.5" y1="39" x2="14.5" y2="39" stroke={color} strokeWidth="1" opacity="0.8"/>
+    <line x1="9.5" y1="44" x2="14.5" y2="44" stroke={color} strokeWidth="1" opacity="0.8"/>
+    <line x1="9.5" y1="49" x2="14.5" y2="49" stroke={color} strokeWidth="1" opacity="0.8"/>
+    <ellipse cx="12" cy="54" rx="3.5" ry="2.5" fill={color} opacity="0.6"/>
+    <path d="M12 54 L11 70 L12 78 L13 70 Z" fill={color} opacity="0.2"/>
+  </svg>
+);
+
+const JettKnives = ({ color }) => {
+  const knives = useMemo(() =>
+    Array.from({ length: 3 }, (_, i) => ({
+      id: i,
+      top: `${20 + i * 28}%`,
+      size: 20 + Math.random() * 16,
+      opacity: 0.15 + Math.random() * 0.18,
+      duration: 3.5 + Math.random() * 3.5,
+      delay: i * 2.8 + Math.random() * 2,
+      tilt: -20 + Math.random() * 40,
+      spinAmount: 180 + Math.random() * 270,
+    })), []
+  );
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        pointerEvents: "none",
+        overflow: "hidden",
+        zIndex: 1,
+        willChange: "transform",
+      }}
+    >
+      {knives.map((k) => (
+        <motion.div
+          key={k.id}
+          style={{
+            position: "absolute",
+            top: k.top,
+            left: "-80px",
+            opacity: k.opacity,
+            filter: `drop-shadow(0 0 4px ${color}88)`,
+          }}
+          animate={{ x: ["0vw", "115vw"], rotate: [k.tilt, k.tilt + k.spinAmount] }}
+          transition={{ duration: k.duration, delay: k.delay, repeat: Infinity, ease: "linear" }}
+        >
+          <KnifeSVG color={color} size={k.size} />
+        </motion.div>
+      ))}
+    </div>
+  );
+};
+
+const FloatParticles = ({ color }) => {
+  const particles = useMemo(() =>
+    Array.from({ length: 18 }, (_, i) => ({
+      id: i,
+      x: `${Math.random() * 100}%`,
+      size: 1 + Math.random() * 2.5,
+      opacity: 0.07 + Math.random() * 0.12,
+      duration: 7 + Math.random() * 9,
+      delay: Math.random() * 7,
+    })), []
+  );
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        pointerEvents: "none",
+        overflow: "hidden",
+        zIndex: 0,
+        willChange: "transform",
+      }}
+    >
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          style={{
+            position: "absolute",
+            left: p.x,
+            bottom: "-10px",
+            width: p.size,
+            height: p.size,
+            borderRadius: "50%",
+            background: color,
+            opacity: p.opacity,
+          }}
+          animate={{ y: [0, -1200] }}
+          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: "linear" }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const AtmosphereLayer = ({ theme }) => {
+  if (theme.motionStyle === "wind") return (
+    <>
+      <WindStreaks color={theme.particle} />
+      <JettKnives color={theme.particle} />
+    </>
+  );
+  if (theme.motionStyle === "float") return <FloatParticles color={theme.particle} />;
+  return null;
+};
+
+export default AtmosphereLayer;
 ```
 
 ### `src/components/CustomCursor.js`
@@ -1241,157 +1455,6 @@ const Footer = () => {
 export default Footer;
 ```
 
-### `src/components/ModelViewer-fine.js`
-
-```js
-import React, { useRef, Suspense, useEffect, useState } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useGLTF, OrbitControls, Environment } from "@react-three/drei";
-import * as THREE from "three";
-const Model = ({ url }) => {
-  const absoluteUrl = url.startsWith("http")
-    ? url
-    : `${window.location.origin}${url}`;
-  const { scene } = useGLTF(absoluteUrl);
-  const groupRef = useRef();
-  const { mouse, camera } = useThree();
-  useEffect(() => {
-    if (!groupRef.current) return;
-    const box = new THREE.Box3().setFromObject(groupRef.current);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    groupRef.current.position.set(-center.x, -center.y, -center.z);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim > 0) {
-      const scale = 2 / maxDim;
-      groupRef.current.scale.setScalar(scale);
-    }
-    const fovRad = (45 * Math.PI) / 180;
-    const fitDist = (2 / (2 * Math.tan(fovRad / 2))) * 3.0;
-    camera.position.set(0, 0, fitDist);
-    camera.near = 0.01;
-    camera.far = fitDist * 200;
-    camera.updateProjectionMatrix();
-  }, [scene, camera]);
-  useFrame(() => {
-    if (!groupRef.current) return;
-    groupRef.current.rotation.y +=
-      (mouse.x * 1.0 - groupRef.current.rotation.y) * 0.05;
-    groupRef.current.rotation.x +=
-      (-mouse.y * 0.4 - groupRef.current.rotation.x) * 0.05;
-  });
-  return (
-    <group ref={groupRef}>
-      <primitive object={scene} />
-    </group>
-  );
-};
-const ModelFallback = () => (
-  <mesh>
-    <boxGeometry args={[1, 1, 1]} />
-    <meshStandardMaterial color="#FF4D1C" wireframe />
-  </mesh>
-);
-class GLBErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-          <p className="font-mono text-xs text-ember">Failed to load model</p>
-          <p className="font-mono text-xs text-slate">Check console for details</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-const ModelViewer = ({ modelPath }) => {
-  const [isTouching, setIsTouching] = useState(false);
-  return (
-    <GLBErrorBoundary>
-      {}
-      <div className="absolute top-3 right-3 z-10 md:hidden">
-        <span className="font-mono text-xs text-slate bg-void px-2 py-1 border border-border-dim">
-          pinch · drag to rotate
-        </span>
-      </div>
-      {}
-      {!isTouching && (
-        <div
-          className="absolute inset-0 z-20 md:hidden"
-          onTouchStart={() => setIsTouching(true)}
-          style={{ background: "transparent" }}
-        />
-      )}
-      {}
-      {!isTouching && (
-        <div
-          className="absolute inset-0 z-30 md:hidden flex items-center justify-center pointer-events-none"
-        >
-          <span className="font-mono text-xs text-ember bg-void px-4 py-2 border border-ember border-opacity-50">
-            tap to interact with model
-          </span>
-        </div>
-      )}
-      {}
-      {isTouching && (
-        <button
-          className="absolute top-3 right-3 z-30 md:hidden font-mono text-xs text-slate bg-void px-3 py-1.5 border border-border-dim"
-          onTouchStart={(e) => {
-            e.stopPropagation();
-            setIsTouching(false);
-          }}
-        >
-          ✕ done
-        </button>
-      )}
-      <Canvas
-        camera={{ position: [0, 0, 5], fov: 45, near: 0.01, far: 1000 }}
-        gl={{
-          antialias: true,
-          alpha: true,
-          powerPreference: "high-performance",
-          failIfMajorPerformanceCaveat: false,
-        }}
-        dpr={[1, 1.5]}
-        style={{
-          touchAction: isTouching ? "none" : "pan-y",
-        }}
-      >
-        <ambientLight intensity={2.5} />
-        <directionalLight position={[5, 10, 7]} intensity={3} />
-        <directionalLight position={[-5, -5, -5]} intensity={1.5} />
-        <pointLight position={[10, 10, 10]} intensity={4} color="#ffffff" />
-        <pointLight position={[-10, 5, 10]} intensity={2} color="#4DD8FF" />
-        <pointLight position={[0, -10, 5]} intensity={1} color="#FF4D1C" />
-        <hemisphereLight skyColor="#ffffff" groundColor="#222222" intensity={1.5} />
-        <Environment preset="studio" />
-        <Suspense fallback={<ModelFallback />}>
-          <Model url={modelPath} />
-        </Suspense>
-        <OrbitControls
-          enableZoom={true}
-          enablePan={false}
-          autoRotate={true}
-          autoRotateSpeed={1.0}
-          minDistance={0.5}
-          maxDistance={20}
-          enabled={isTouching || window.matchMedia("(hover: hover)").matches}
-        />
-      </Canvas>
-    </GLBErrorBoundary>
-  );
-};
-export default ModelViewer;
-```
-
 ### `src/components/ModelViewer.js`
 
 ```js
@@ -1399,12 +1462,6 @@ import React, { useRef, Suspense, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, OrbitControls, Environment } from "@react-three/drei";
 import * as THREE from "three";
-const preloadModel = (url) => {
-  const absoluteUrl = url.startsWith("http")
-    ? url
-    : `${window.location.origin}${url}`;
-  useGLTF.preload(absoluteUrl);
-};
 const Model = ({ url }) => {
   const absoluteUrl = url.startsWith("http")
     ? url
@@ -1470,9 +1527,6 @@ class GLBErrorBoundary extends React.Component {
   }
 }
 const ModelViewer = ({ modelPath }) => {
-  useEffect(() => {
-    preloadModel(modelPath);
-  }, [modelPath]);
   return (
     <div className="relative w-full h-full">
       <GLBErrorBoundary>
@@ -1485,9 +1539,8 @@ const ModelViewer = ({ modelPath }) => {
             failIfMajorPerformanceCaveat: false,
           }}
           dpr={[1, 1.5]}
-          style={{
-            touchAction: "pan-y",
-          }}
+          frameloop="demand"
+          style={{ touchAction: "pan-y" }}
         >
           <ambientLight intensity={2.5} />
           <directionalLight position={[5, 10, 7]} intensity={3} />
@@ -1500,7 +1553,6 @@ const ModelViewer = ({ modelPath }) => {
           <Suspense fallback={<ModelFallback />}>
             <Model url={modelPath} />
           </Suspense>
-          {}
           <OrbitControls
             enableZoom={true}
             enablePan={false}
@@ -1511,7 +1563,6 @@ const ModelViewer = ({ modelPath }) => {
             enabled={true}
           />
         </Canvas>
-        {}
         <div className="absolute bottom-4 left-0 right-0 hidden md:flex justify-center pointer-events-none">
           <span className="font-mono text-xs text-slate bg-void px-3 py-1.5 border border-border-dim">
             drag to rotate · scroll to zoom
@@ -2032,7 +2083,7 @@ const ThreeHero = () => {
     torus2.rotation.x = -Math.PI / 4;
     torus2.rotation.z = Math.PI / 5;
     scene.add(torus2);
-    const particleCount = 600;
+    const particleCount = 300;
     const positions = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
       const r = 2.5 + Math.random() * 3;
@@ -2071,9 +2122,11 @@ const ThreeHero = () => {
     };
     window.addEventListener("mousemove", onMouseMove);
     let rafId;
+    let running = true;
     let elapsed  = 0;
     let lastTime = performance.now();
     const animate = () => {
+      if (!running) return;
       rafId = requestAnimationFrame(animate);
       const now = performance.now();
       elapsed += (now - lastTime) / 1000;
@@ -2093,6 +2146,33 @@ const ThreeHero = () => {
       renderer.render(scene, camera);
     };
     animate();
+    const visibilityObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          if (!running) {
+            running = true;
+            lastTime = performance.now();
+            animate();
+          }
+        } else {
+          running = false;
+          cancelAnimationFrame(rafId);
+        }
+      },
+      { threshold: 0 }
+    );
+    visibilityObserver.observe(mount);
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        running = false;
+        cancelAnimationFrame(rafId);
+      } else if (mount.getBoundingClientRect().top < window.innerHeight) {
+        running = true;
+        lastTime = performance.now();
+        animate();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     const onResize = () => {
       const w = mount.clientWidth;
       const h = mount.clientHeight;
@@ -2103,15 +2183,21 @@ const ThreeHero = () => {
     window.addEventListener("resize", onResize);
     const onContextLost = (e) => {
       e.preventDefault();
+      running = false;
       cancelAnimationFrame(rafId);
     };
     const onContextRestored = () => {
+      running = true;
+      lastTime = performance.now();
       animate();
     };
     renderer.domElement.addEventListener("webglcontextlost", onContextLost);
     renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
     return () => {
+      running = false;
       cancelAnimationFrame(rafId);
+      visibilityObserver.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("resize", onResize);
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
@@ -2188,7 +2274,7 @@ export const projects = [
     color: "#4DD8FF",
     thumbnail: "/projects/jett/jett-4.jpeg",
     video: "/projects/jett/jett-video.mp4",
-    model: "/models/male-optimized.glb",
+    model: "/models/male-optimized1.glb",
     gallery: [
       "/projects/jett/jett-6.jpeg",
       "/projects/jett/jett-1.jpeg",
@@ -2371,16 +2457,23 @@ canvas { display: block; }
 ### `src/index.js`
 
 ```js
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
-const root = ReactDOM.createRoot(document.getElementById('root'));
+import React from "react";
+import ReactDOM from "react-dom/client";
+import "./index.css";
+import App from "./App";
+import "./preload";
+const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
 );
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+    });
+  });
+}
 ```
 
 ### `src/pages/Home.js`
@@ -2820,6 +2913,7 @@ import { useInView } from "react-intersection-observer";
 import PageTransition from "../components/PageTransition";
 import Footer from "../components/Footer";
 import { getById, projects } from "../data/projects";
+import AtmosphereLayer from "../components/AtmosphereLayer";
 const ModelViewer = React.lazy(() => import("../components/ModelViewer"));
 gsap.registerPlugin(ScrollTrigger);
 const DEFAULT_THEME = {
@@ -2837,80 +2931,6 @@ const DEFAULT_THEME = {
   cardBg: "rgba(10,10,18,0.85)",
   border: "rgba(255,75,28,0.18)",
 };
-const STREAK_STYLE_ID = "wind-streak-keyframes";
-const injectStreakStyles = () => {
-  if (document.getElementById(STREAK_STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STREAK_STYLE_ID;
-  style.textContent = `
-    @keyframes windSlash { from { transform: translateX(-400px) skewY(-6deg); } to { transform: translateX(115vw) skewY(-6deg); } }
-    .wind-streak { position: absolute; left: 0; pointer-events: none; animation: windSlash linear infinite; will-change: transform; }
-    @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
-    .gallery-card-visible { animation: fadeSlideIn 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
-  `;
-  document.head.appendChild(style);
-};
-const WindStreaks = ({ color }) => {
-  useEffect(() => { injectStreakStyles(); }, []);
-  const streaks = useMemo(() => [
-    { top: "8%",  width: 260, height: 1, opacity: 0.22, duration: "4.2s", delay: "0s"   },
-    { top: "21%", width: 180, height: 2, opacity: 0.38, duration: "3.1s", delay: "1.4s" },
-    { top: "35%", width: 340, height: 1, opacity: 0.18, duration: "5.0s", delay: "0.7s" },
-    { top: "49%", width: 220, height: 3, opacity: 0.45, duration: "3.6s", delay: "2.1s" },
-    { top: "63%", width: 160, height: 1, opacity: 0.20, duration: "4.8s", delay: "0.3s" },
-    { top: "77%", width: 300, height: 2, opacity: 0.32, duration: "3.9s", delay: "1.8s" },
-    { top: "88%", width: 200, height: 1, opacity: 0.16, duration: "5.5s", delay: "0.9s" },
-    { top: "55%", width: 140, height: 2, opacity: 0.28, duration: "2.8s", delay: "3.0s" },
-  ], []);
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
-      {streaks.map((s, i) => (
-        <div key={i} className="wind-streak" style={{
-          top: s.top, width: s.width, height: s.height,
-          background: `linear-gradient(90deg, transparent 0%, ${color} 45%, ${color} 65%, transparent 100%)`,
-          opacity: s.opacity, animationDuration: s.duration, animationDelay: s.delay,
-        }} />
-      ))}
-    </div>
-  );
-};
-const FloatParticles = ({ color }) => {
-  const particles = useMemo(() =>
-    Array.from({ length: 6 }, (_, i) => ({
-      id: i,
-      x: `${Math.random() * 100}%`,
-      size: 1 + Math.random() * 2.5,
-      opacity: 0.07 + Math.random() * 0.12,
-      duration: 7 + Math.random() * 9,
-      delay: Math.random() * 7,
-    })), []
-  );
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
-      {particles.map((p) => (
-        <motion.div
-          key={p.id}
-          style={{
-            position: "absolute",
-            left: p.x,
-            bottom: "-10px",
-            width: p.size,
-            height: p.size,
-            borderRadius: "50%",
-            background: color,
-            opacity: p.opacity,
-          }}
-          animate={{ y: [0, -1200] }}
-          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: "linear" }}
-        />
-      ))}
-    </div>
-  );
-};
-const AtmosphereLayer = ({ theme }) => {
-  if (theme.motionStyle === "wind") return <WindStreaks color={theme.particle} />;
-  return <FloatParticles color={theme.particle} />;
-};
 const Gallery = ({ project, theme, galleryRef }) => {
   const scrollRef = useRef(null);
   const scroll = (dir) => {
@@ -2920,8 +2940,15 @@ const Gallery = ({ project, theme, galleryRef }) => {
   return (
     <div className="mt-20" ref={galleryRef}>
       <div className="flex items-center justify-between mb-6">
-        <p className="font-mono text-xs tracking-widest uppercase" style={{ color: theme.accent, fontFamily: theme.fontBody }}>Gallery</p>
-        <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.45 }}>{project.gallery.length} images</span>
+        <p
+          className="font-mono text-xs tracking-widest uppercase"
+          style={{ color: theme.accent, fontFamily: theme.fontBody }}
+        >
+          Gallery
+        </p>
+        <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.45 }}>
+          {project.gallery.length} images
+        </span>
       </div>
       <div className="relative">
         {}
@@ -2930,18 +2957,28 @@ const Gallery = ({ project, theme, galleryRef }) => {
           className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-5 z-10 w-9 h-9 flex items-center justify-center text-lg"
           style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.accentSoft }}
           aria-label="Scroll left"
-        >‹</button>
+        >
+          ‹
+        </button>
         {}
         <button
           onClick={() => scroll(1)}
           className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-5 z-10 w-9 h-9 flex items-center justify-center text-lg"
           style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.accentSoft }}
           aria-label="Scroll right"
-        >›</button>
+        >
+          ›
+        </button>
         <div
           ref={scrollRef}
           className="flex gap-3 overflow-x-auto pb-4"
-          style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollBehavior: "smooth", scrollbarWidth: "none", msOverflowStyle: "none" }}
+          style={{
+            scrollSnapType: "x mandatory",
+            WebkitOverflowScrolling: "touch",
+            scrollBehavior: "smooth",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}
         >
           {project.gallery.map((src, i) => (
             <div
@@ -2967,23 +3004,43 @@ const Gallery = ({ project, theme, galleryRef }) => {
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 loading="lazy"
               />
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center"
-                style={{ background: "rgba(0,0,0,0.6)" }}>
-                <span className="font-mono text-xs px-3 py-1.5" style={{ color: theme.accent, border: `1px solid ${theme.accent}` }}>view</span>
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,0.6)" }}
+              >
+                <span
+                  className="font-mono text-xs px-3 py-1.5"
+                  style={{ color: theme.accent, border: `1px solid ${theme.accent}` }}
+                >
+                  view
+                </span>
               </div>
             </div>
           ))}
         </div>
       </div>
       {}
-      <div id="lightbox" className="fixed inset-0 z-50 items-center justify-center" style={{ display: "none", background: "rgba(0,0,0,0.96)" }}
-        onClick={() => { document.getElementById("lightbox").style.display = "none"; }}>
-        <button className="absolute top-6 right-6 font-mono text-sm" style={{ color: theme.accentSoft }}
-          onClick={() => { document.getElementById("lightbox").style.display = "none"; }}>
+      <div
+        id="lightbox"
+        className="fixed inset-0 z-50 items-center justify-center"
+        style={{ display: "none", background: "rgba(0,0,0,0.96)" }}
+        onClick={() => { document.getElementById("lightbox").style.display = "none"; }}
+      >
+        <button
+          className="absolute top-6 right-6 font-mono text-sm"
+          style={{ color: theme.accentSoft }}
+          onClick={() => { document.getElementById("lightbox").style.display = "none"; }}
+        >
           ✕ close
         </button>
-        <img id="lightbox-img" src="" alt="Full size" className="max-w-full max-h-full object-contain"
-          style={{ maxHeight: "90vh", maxWidth: "90vw" }} onClick={(e) => e.stopPropagation()} />
+        <img
+          id="lightbox-img"
+          src=""
+          alt="Full size"
+          className="max-w-full max-h-full object-contain"
+          style={{ maxHeight: "90vh", maxWidth: "90vw" }}
+          onClick={(e) => e.stopPropagation()}
+        />
       </div>
     </div>
   );
@@ -3009,40 +3066,51 @@ const ProjectDetail = () => {
     document.body.setAttribute("data-no-three", "true");
     return () => document.body.removeAttribute("data-no-three");
   }, []);
-  const heroRef = useRef(null);
-  const contentRef = useRef(null);
-  const galleryRef = useRef(null);
-  const { ref: modelRef, inView: modelInView } = useInView({ triggerOnce: true, threshold: 0.1 });
+  const heroRef     = useRef(null);
+  const contentRef  = useRef(null);
+  const galleryRef  = useRef(null);
+  const { ref: modelRef, inView: modelInView } = useInView({
+    triggerOnce: true,
+    threshold: 0.1,
+  });
   const currentIndex = projects.findIndex((p) => p.id === id);
-  const prevProject = projects[currentIndex - 1] || null;
-  const nextProject = projects[currentIndex + 1] || null;
+  const prevProject  = projects[currentIndex - 1] || null;
+  const nextProject  = projects[currentIndex + 1] || null;
   useEffect(() => {
     if (!project) return;
-    injectStreakStyles();
     const sections = contentRef.current?.querySelectorAll(".content-block");
     sections?.forEach((el, i) => {
       gsap.fromTo(el, { opacity: 0, y: 36 }, {
         opacity: 1, y: 0, duration: 0.8, ease: "power3.out",
-        scrollTrigger: { trigger: el, start: "top 88%" }, delay: i * 0.08,
+        scrollTrigger: { trigger: el, start: "top 88%" },
+        delay: i * 0.08,
       });
     });
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("gallery-card-visible");
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.15 });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("gallery-card-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15 }
+    );
     const imgs = galleryRef.current?.querySelectorAll(".gallery-img");
     imgs?.forEach((el) => { el.style.opacity = "0"; observer.observe(el); });
-    return () => { ScrollTrigger.getAll().forEach((t) => t.kill()); observer.disconnect(); };
+    return () => {
+      ScrollTrigger.getAll().forEach((t) => t.kill());
+      observer.disconnect();
+    };
   }, [project]);
   if (!project) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6">
         <p className="font-mono text-sm" style={{ color: theme.accent }}>Project not found.</p>
-        <Link to="/" className="font-mono text-xs hover:underline" style={{ color: theme.accent }}>← Back Home</Link>
+        <Link to="/" className="font-mono text-xs hover:underline" style={{ color: theme.accent }}>
+          ← Back Home
+        </Link>
       </div>
     );
   }
@@ -3055,18 +3123,29 @@ const ProjectDetail = () => {
       {}
       <div
         className="fixed inset-0 pointer-events-none"
-        style={{ background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)", zIndex: 1 }}
+        style={{
+          background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)",
+          zIndex: 1,
+        }}
       />
       {}
       <div className="fixed top-0 left-0 right-0 z-40 px-6 md:px-12 pt-24 pb-4 pointer-events-none">
-        <motion.div className="pointer-events-auto inline-block" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+        <motion.div
+          className="pointer-events-auto inline-block"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+        >
           <button
             onClick={() => navigate(-1)}
             className="flex items-center gap-2 font-mono text-xs transition-opacity hover:opacity-100 group"
             style={{ color: theme.accentSoft, opacity: 0.7, fontFamily: theme.fontBody }}
           >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="group-hover:-translate-x-1 transition-transform">
-              <path d="M13 4L7 10l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg
+              width="20" height="20" viewBox="0 0 20 20" fill="none"
+              className="group-hover:-translate-x-1 transition-transform"
+            >
+              <path d="M13 4L7 10l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             Back
           </button>
@@ -3075,34 +3154,58 @@ const ProjectDetail = () => {
       {}
       <section ref={heroRef} className="relative h-[75vh] overflow-hidden" style={{ zIndex: 2 }}>
         <div className="absolute inset-0 scale-110">
-          <img src={project.thumbnail} alt={project.title} className="w-full h-full object-cover" style={{ objectPosition: "center 20%" }} />
+          <img
+            src={project.thumbnail}
+            alt={project.title}
+            className="w-full h-full object-cover"
+            style={{ objectPosition: "center 20%" }}
+          />
         </div>
-        {}
         <div className="absolute inset-0" style={{ background: theme.heroOverlay }} />
-        {}
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 45%)" }} />
-        {}
-        <div className="absolute bottom-0 left-0 right-0 h-64 pointer-events-none"
-          style={{ background: `linear-gradient(to top, ${theme.accent}55 0%, ${theme.accent}22 40%, transparent 100%)` }} />
-        {}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-64 pointer-events-none"
+          style={{ background: `linear-gradient(to top, ${theme.accent}55 0%, ${theme.accent}22 40%, transparent 100%)` }}
+        />
         <div className="absolute inset-y-0 left-0 w-32 pointer-events-none"
           style={{ background: "linear-gradient(to right, rgba(0,0,0,0.7), transparent)" }} />
         <div className="absolute inset-y-0 right-0 w-32 pointer-events-none"
           style={{ background: "linear-gradient(to left, rgba(0,0,0,0.7), transparent)" }} />
         <div className="absolute bottom-0 left-0 right-0 px-6 md:px-16 pb-16">
-          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}>
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div className="flex items-center gap-4 mb-5">
-              <span className="font-mono text-xs px-3 py-1 tracking-widest uppercase"
-                style={{ background: "rgba(0,0,0,0.55)", color: "#ffffff", border: `1px solid rgba(255,255,255,0.25)`, fontFamily: theme.fontBody }}>
+              <span
+                className="font-mono text-xs px-3 py-1 tracking-widest uppercase"
+                style={{
+                  background: "rgba(0,0,0,0.55)",
+                  color: "#ffffff",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  fontFamily: theme.fontBody,
+                }}
+              >
                 {project.category}
               </span>
-              <span className="font-mono text-xs" style={{ color: "#ffffff", opacity: 0.7 }}>{project.year}</span>
+              <span className="font-mono text-xs" style={{ color: "#ffffff", opacity: 0.7 }}>
+                {project.year}
+              </span>
             </div>
-            <h1 className="leading-none tracking-tight"
-              style={{ fontFamily: theme.fontDisplay, color: theme.highlight, fontSize: "clamp(4rem,11vw,9rem)", textShadow: `0 0 40px ${theme.accent}88` }}>
+            <h1
+              className="leading-none tracking-tight"
+              style={{
+                fontFamily: theme.fontDisplay,
+                color: theme.highlight,
+                fontSize: "clamp(4rem,11vw,9rem)",
+                textShadow: `0 0 40px ${theme.accent}88`,
+              }}
+            >
               {project.title}
             </h1>
-            <motion.div className="mt-4 h-px"
+            <motion.div
+              className="mt-4 h-px"
               style={{ background: `linear-gradient(90deg, ${theme.accent}, transparent)`, width: 0 }}
               animate={{ width: "300px" }}
               transition={{ delay: 0.9, duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
@@ -3116,44 +3219,101 @@ const ProjectDetail = () => {
           {}
           <div className="lg:col-span-2">
             <div className="content-block">
-              <p className="font-mono text-xs tracking-widest uppercase mb-4" style={{ color: theme.accent, fontFamily: theme.fontBody }}>Overview</p>
-              <p className="text-lg leading-relaxed mb-5" style={{ color: theme.highlight, fontFamily: theme.fontBody, fontWeight: 300 }}>
+              <p
+                className="font-mono text-xs tracking-widest uppercase mb-4"
+                style={{ color: theme.accent, fontFamily: theme.fontBody }}
+              >
+                Overview
+              </p>
+              <p
+                className="text-lg leading-relaxed mb-5"
+                style={{ color: theme.highlight, fontFamily: theme.fontBody, fontWeight: 300 }}
+              >
                 {project.description}
               </p>
-              <p className="leading-relaxed" style={{ color: theme.accentSoft, opacity: 0.6, fontFamily: theme.fontBody, fontWeight: 300 }}>
-                This project required deep collaboration between creative direction, technical implementation, and post-production — synthesizing everything from concept sketches through final delivery.
+              <p
+                className="leading-relaxed"
+                style={{ color: theme.accentSoft, opacity: 0.6, fontFamily: theme.fontBody, fontWeight: 300 }}
+              >
+                This project required deep collaboration between creative direction, technical
+                implementation, and post-production — synthesizing everything from concept
+                sketches through final delivery.
               </p>
             </div>
             {}
             {project.model && (
-              <motion.div className="mt-14 content-block" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
-                <p className="font-mono text-xs tracking-widest uppercase mb-4" style={{ color: theme.accentSoft, opacity: 0.6, fontFamily: theme.fontBody }}>
+              <motion.div
+                className="mt-14 content-block"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8 }}
+              >
+                <p
+                  className="font-mono text-xs tracking-widest uppercase mb-4"
+                  style={{ color: theme.accentSoft, opacity: 0.6, fontFamily: theme.fontBody }}
+                >
                   3D Model — Interactive
                 </p>
-                <div ref={modelRef} className="relative overflow-hidden"
-                  style={{ height: "500px", background: theme.cardBg, border: `1px solid ${theme.border}`, boxShadow: `0 0 60px ${theme.accent}0d` }}>
+                <div
+                  ref={modelRef}
+                  className="relative overflow-hidden"
+                  style={{
+                    height: "500px",
+                    background: theme.cardBg,
+                    border: `1px solid ${theme.border}`,
+                    boxShadow: `0 0 60px ${theme.accent}0d`,
+                  }}
+                >
                   {modelInView ? (
-                    <Suspense fallback={
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-4">
-                        <motion.div className="w-8 h-8" style={{ border: `1px solid ${theme.accent}` }}
-                          animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} />
-                        <span className="font-mono text-xs animate-pulse" style={{ color: theme.accentSoft, opacity: 0.5 }}>Loading model...</span>
-                      </div>
-                    }>
+                    <Suspense
+                      fallback={
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+                          <motion.div
+                            className="w-8 h-8"
+                            style={{ border: `1px solid ${theme.accent}` }}
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                          />
+                          <span
+                            className="font-mono text-xs animate-pulse"
+                            style={{ color: theme.accentSoft, opacity: 0.5 }}
+                          >
+                            Loading model...
+                          </span>
+                        </div>
+                      }
+                    >
                       <ModelViewer modelPath={project.model} />
                     </Suspense>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                      <motion.div className="w-6 h-6" style={{ border: `1px solid ${theme.border}` }}
-                        animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }} />
-                      <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.35 }}>Scroll to load model</span>
+                      <motion.div
+                        className="w-6 h-6"
+                        style={{ border: `1px solid ${theme.border}` }}
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                      />
+                      <span className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.35 }}>
+                        Scroll to load model
+                      </span>
                     </div>
                   )}
                   {}
-                  <div className="absolute top-0 left-0 w-5 h-5 pointer-events-none" style={{ borderTop: `1px solid ${theme.accent}`, borderLeft: `1px solid ${theme.accent}` }} />
-                  <div className="absolute bottom-0 right-0 w-5 h-5 pointer-events-none" style={{ borderBottom: `1px solid ${theme.accent}`, borderRight: `1px solid ${theme.accent}` }} />
+                  <div className="absolute top-0 left-0 w-5 h-5 pointer-events-none"
+                    style={{ borderTop: `1px solid ${theme.accent}`, borderLeft: `1px solid ${theme.accent}` }} />
+                  <div className="absolute bottom-0 right-0 w-5 h-5 pointer-events-none"
+                    style={{ borderBottom: `1px solid ${theme.accent}`, borderRight: `1px solid ${theme.accent}` }} />
                   <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
-                    <span className="font-mono text-xs px-3 py-1.5" style={{ color: theme.accentSoft, opacity: 0.45, background: theme.cardBg, border: `1px solid ${theme.border}` }}>
+                    <span
+                      className="font-mono text-xs px-3 py-1.5"
+                      style={{
+                        color: theme.accentSoft,
+                        opacity: 0.45,
+                        background: theme.cardBg,
+                        border: `1px solid ${theme.border}`,
+                      }}
+                    >
                       drag to rotate · scroll to zoom
                     </span>
                   </div>
@@ -3162,22 +3322,58 @@ const ProjectDetail = () => {
             )}
             {}
             {!project.model && project.id === "jett-valorant" && (
-              <motion.div className="mt-14 content-block" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
-                <p className="font-mono text-xs tracking-widest uppercase mb-4" style={{ color: theme.accentSoft, opacity: 0.5 }}>3D Model — Coming Soon</p>
-                <div className="flex flex-col items-center justify-center gap-4"
-                  style={{ height: "300px", border: `1px dashed ${theme.accent}28`, background: theme.cardBg }}>
-                  <motion.div className="w-16 h-16" style={{ border: `2px solid ${theme.accent}` }}
-                    animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }} />
-                  <p className="font-mono text-xs tracking-widest" style={{ color: theme.accentSoft, opacity: 0.45 }}>Interactive 3D viewer coming soon</p>
+              <motion.div
+                className="mt-14 content-block"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8 }}
+              >
+                <p className="font-mono text-xs tracking-widest uppercase mb-4"
+                  style={{ color: theme.accentSoft, opacity: 0.5 }}>
+                  3D Model — Coming Soon
+                </p>
+                <div
+                  className="flex flex-col items-center justify-center gap-4"
+                  style={{ height: "300px", border: `1px dashed ${theme.accent}28`, background: theme.cardBg }}
+                >
+                  <motion.div
+                    className="w-16 h-16"
+                    style={{ border: `2px solid ${theme.accent}` }}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  />
+                  <p className="font-mono text-xs tracking-widest" style={{ color: theme.accentSoft, opacity: 0.45 }}>
+                    Interactive 3D viewer coming soon
+                  </p>
                 </div>
               </motion.div>
             )}
             {}
             {project.video && (
-              <motion.div className="mt-14 content-block" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
-                <p className="font-mono text-xs tracking-widest uppercase mb-4" style={{ color: theme.accentSoft, opacity: 0.6, fontFamily: theme.fontBody }}>Project Video</p>
-                <div className="relative aspect-video overflow-hidden" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
-                  <video src={project.video} controls className="w-full h-full object-cover" poster={project.thumbnail} />
+              <motion.div
+                className="mt-14 content-block"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8 }}
+              >
+                <p
+                  className="font-mono text-xs tracking-widest uppercase mb-4"
+                  style={{ color: theme.accentSoft, opacity: 0.6, fontFamily: theme.fontBody }}
+                >
+                  Project Video
+                </p>
+                <div
+                  className="relative aspect-video overflow-hidden"
+                  style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}
+                >
+                  <video
+                    src={project.video}
+                    controls
+                    className="w-full h-full object-cover"
+                    poster={project.thumbnail}
+                  />
                 </div>
               </motion.div>
             )}
@@ -3185,7 +3381,12 @@ const ProjectDetail = () => {
           {}
           <div className="space-y-6">
             <div className="content-block p-6" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
-              <p className="font-mono text-xs tracking-widest uppercase mb-5" style={{ color: theme.accent, fontFamily: theme.fontBody }}>Tools Used</p>
+              <p
+                className="font-mono text-xs tracking-widest uppercase mb-5"
+                style={{ color: theme.accent, fontFamily: theme.fontBody }}
+              >
+                Tools Used
+              </p>
               <div className="space-y-3">
                 {project.tools.map((tool) => (
                   <div key={tool} className="flex items-center gap-3 text-sm" style={{ fontFamily: theme.fontBody }}>
@@ -3196,9 +3397,19 @@ const ProjectDetail = () => {
               </div>
             </div>
             <div className="content-block p-6" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
-              <p className="font-mono text-xs tracking-widest uppercase mb-5" style={{ color: theme.accent, fontFamily: theme.fontBody }}>Details</p>
+              <p
+                className="font-mono text-xs tracking-widest uppercase mb-5"
+                style={{ color: theme.accent, fontFamily: theme.fontBody }}
+              >
+                Details
+              </p>
               <dl className="space-y-3">
-                {[["Category", project.category], ["Year", project.year], ["Duration", "4–6 weeks"], ["Client", "Confidential"]].map(([label, value]) => (
+                {[
+                  ["Category", project.category],
+                  ["Year", project.year],
+                  ["Duration", "4–6 weeks"],
+                  ["Client", "Confidential"],
+                ].map(([label, value]) => (
                   <div key={label} className="flex justify-between">
                     <dt className="font-mono text-xs" style={{ color: theme.accentSoft, opacity: 0.5 }}>{label}</dt>
                     <dd className="font-mono text-xs" style={{ color: theme.highlight, opacity: 0.8 }}>{value}</dd>
@@ -3219,13 +3430,17 @@ const ProjectDetail = () => {
           {prevProject ? (
             <Link to={`/project/${prevProject.id}`} className="group">
               <p className="font-mono text-xs mb-2" style={{ color: theme.accentSoft, opacity: 0.45 }}>← Previous</p>
-              <p className="font-bold" style={{ fontFamily: theme.fontDisplay, color: theme.highlight }}>{prevProject.title}</p>
+              <p className="font-bold" style={{ fontFamily: theme.fontDisplay, color: theme.highlight }}>
+                {prevProject.title}
+              </p>
             </Link>
           ) : <div />}
           {nextProject ? (
             <Link to={`/project/${nextProject.id}`} className="group text-right">
               <p className="font-mono text-xs mb-2" style={{ color: theme.accentSoft, opacity: 0.45 }}>Next →</p>
-              <p className="font-bold" style={{ fontFamily: theme.fontDisplay, color: theme.highlight }}>{nextProject.title}</p>
+              <p className="font-bold" style={{ fontFamily: theme.fontDisplay, color: theme.highlight }}>
+                {nextProject.title}
+              </p>
             </Link>
           ) : <div />}
         </div>
@@ -3235,6 +3450,22 @@ const ProjectDetail = () => {
   );
 };
 export default ProjectDetail;
+```
+
+### `src/preload.js`
+
+```js
+import { useGLTF } from "@react-three/drei";
+import { projects } from "./data/projects";
+
+projects
+  .filter((p) => p.model)
+  .forEach((p) => {
+    const absoluteUrl = p.model.startsWith("http")
+      ? p.model
+      : `${window.location.origin}${p.model}`;
+    useGLTF.preload(absoluteUrl);
+  });
 ```
 
 ### `src/reportWebVitals.js`
@@ -3302,6 +3533,33 @@ module.exports = {
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/models/(.*).gltf",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/models/(.*).bin",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/projects/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
         }
       ]
     }

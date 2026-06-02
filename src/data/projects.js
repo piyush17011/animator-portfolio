@@ -64,7 +64,7 @@ export const projects = [
     color: "#4DD8FF",
     thumbnail: "/projects/jett/jett-4.jpeg",
     video: "/projects/jett/jett-video.mp4",
-    model: "/models/male-optimized.glb",
+    model: "/models/male-optimized1.glb",
     gallery: [
       "/projects/jett/jett-6.jpeg",
       "/projects/jett/jett-1.jpeg",

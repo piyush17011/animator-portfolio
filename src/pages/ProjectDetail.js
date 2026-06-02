@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, Suspense, useMemo } from "react";
+import React, { useEffect, useRef, Suspense } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { gsap } from "gsap";

@@ -3,38 +3,26 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, OrbitControls, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
-const preloadModel = (url) => {
-  const absoluteUrl = url.startsWith("http")
-    ? url
-    : `${window.location.origin}${url}`;
-  useGLTF.preload(absoluteUrl);
-};
-
+// ── Model component ───────────────────────────────────────────────────────────
 const Model = ({ url }) => {
   const absoluteUrl = url.startsWith("http")
     ? url
     : `${window.location.origin}${url}`;
-
   const { scene } = useGLTF(absoluteUrl);
   const groupRef = useRef();
   const { mouse, camera } = useThree();
 
   useEffect(() => {
     if (!groupRef.current) return;
-
     const box = new THREE.Box3().setFromObject(groupRef.current);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-
     groupRef.current.position.set(-center.x, -center.y, -center.z);
-
     const maxDim = Math.max(size.x, size.y, size.z);
     if (maxDim > 0) {
       const scale = 2 / maxDim;
       groupRef.current.scale.setScalar(scale);
     }
-
-    // 4.5 = more zoomed out starting position
     const fovRad = (45 * Math.PI) / 180;
     const fitDist = (2 / (2 * Math.tan(fovRad / 2))) * 1.4;
     camera.position.set(0, 0, fitDist);
@@ -45,7 +33,6 @@ const Model = ({ url }) => {
 
   useFrame(() => {
     if (!groupRef.current) return;
-    // Gentle cursor parallax — subtle, doesn't fight with OrbitControls
     groupRef.current.rotation.y +=
       (mouse.x * 0.3 - groupRef.current.rotation.y) * 0.02;
     groupRef.current.rotation.x +=
@@ -88,10 +75,8 @@ class GLBErrorBoundary extends React.Component {
 }
 
 const ModelViewer = ({ modelPath }) => {
-  useEffect(() => {
-    preloadModel(modelPath);
-  }, [modelPath]);
-
+  // ── Preload is called at the module level in src/preload.js —
+  //    no need to repeat it here on every mount.
   return (
     <div className="relative w-full h-full">
       <GLBErrorBoundary>
@@ -103,11 +88,12 @@ const ModelViewer = ({ modelPath }) => {
             powerPreference: "high-performance",
             failIfMajorPerformanceCaveat: false,
           }}
+          // Cap DPR at 1.5 — no visual benefit higher for a model viewer
           dpr={[1, 1.5]}
-          style={{
-            // Always allow page scroll on mobile — user can still drag to rotate
-            touchAction: "pan-y",
-          }}
+          // frameloop="demand" renders only when something changes (mouse/orbit)
+          // which eliminates idle GPU usage between interactions
+          frameloop="demand"
+          style={{ touchAction: "pan-y" }}
         >
           <ambientLight intensity={2.5} />
           <directionalLight position={[5, 10, 7]} intensity={3} />
@@ -117,12 +103,9 @@ const ModelViewer = ({ modelPath }) => {
           <pointLight position={[0, -10, 5]} intensity={1} color="#FF4D1C" />
           <hemisphereLight skyColor="#ffffff" groundColor="#222222" intensity={1.5} />
           <Environment preset="studio" />
-
           <Suspense fallback={<ModelFallback />}>
             <Model url={modelPath} />
           </Suspense>
-
-          {/* Auto-rotate slow + user can drag anytime, no lock needed */}
           <OrbitControls
             enableZoom={true}
             enablePan={false}
@@ -134,7 +117,6 @@ const ModelViewer = ({ modelPath }) => {
           />
         </Canvas>
 
-        {/* Single bottom hint — desktop only, no mobile clutter */}
         <div className="absolute bottom-4 left-0 right-0 hidden md:flex justify-center pointer-events-none">
           <span className="font-mono text-xs text-slate bg-void px-3 py-1.5 border border-border-dim">
             drag to rotate · scroll to zoom

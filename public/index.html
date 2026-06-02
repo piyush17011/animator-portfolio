@@ -4,12 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#050508" />
+
+    <!-- Preconnect so Google Fonts DNS is resolved before CSS loads -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!--
+      STEP 7 — Preload model files.
+      The browser starts downloading these in parallel with JS parsing —
+      before React boots, before routes are matched, before any component mounts.
+      Update these paths if you add/rename models.
+    -->
+    <link rel="preload" href="/models/jett-txt.glb" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/models/male-optimized.glb" as="fetch" crossorigin="anonymous" />
+
     <title>Omkar Bane — Motion Designer & Animator</title>
-<meta name="description" content="Omkar Bane — Motion Designer and Animator crafting cinematic experiences, 3D animation, and visual effects." />
-<meta property="og:title" content="Omkar Bane — Motion Designer" />
-<meta property="og:description" content="Portfolio of Omkar Bane, motion designer and animator." />
+    <meta name="description" content="Omkar Bane — Motion Designer and Animator crafting cinematic experiences, 3D animation, and visual effects." />
+    <meta property="og:title" content="Omkar Bane — Motion Designer" />
+    <meta property="og:description" content="Portfolio of Omkar Bane, motion designer and animator." />
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

@@ -6,16 +6,13 @@ const ThreeHero = () => {
   const mountRef = useRef(null);
 
   useEffect(() => {
-    // Don't render if ModelViewer is active (prevents WebGL context loss)
     if (document.body.getAttribute("data-no-three")) return;
-
     const mount = mountRef.current;
     if (!mount) return;
 
     const W = mount.clientWidth;
     const H = mount.clientHeight;
 
-    // ── Scene Setup ──
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x050508, 0.035);
 
@@ -29,27 +26,25 @@ const ThreeHero = () => {
       failIfMajorPerformanceCaveat: false,
     });
     renderer.setSize(W, H);
+    // Cap at 1.5x — no benefit going higher on a background element
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setClearColor(0x000000, 0);
     mount.appendChild(renderer.domElement);
 
-    // ── Lighting ──
+    // ── Lights ──────────────────────────────────────────────────────────────
     const ambientLight = new THREE.AmbientLight(0x1a1a2e, 2);
     scene.add(ambientLight);
-
     const pointLight1 = new THREE.PointLight(0xff4d1c, 8, 12);
     pointLight1.position.set(3, 3, 3);
     scene.add(pointLight1);
-
     const pointLight2 = new THREE.PointLight(0x4d9fff, 5, 10);
     pointLight2.position.set(-3, -2, 2);
     scene.add(pointLight2);
-
     const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
     rimLight.position.set(0, 5, -5);
     scene.add(rimLight);
 
-    // ── Main Icosahedron ──
+    // ── Geometry ─────────────────────────────────────────────────────────────
     const icoGeo = new THREE.IcosahedronGeometry(1.2, 1);
     const icoMat = new THREE.MeshStandardMaterial({
       color: 0x0f0f18,
@@ -61,7 +56,6 @@ const ThreeHero = () => {
     const icosahedron = new THREE.Mesh(icoGeo, icoMat);
     scene.add(icosahedron);
 
-    // Wireframe overlay
     const wireGeo = new THREE.IcosahedronGeometry(1.22, 1);
     const wireMat = new THREE.MeshBasicMaterial({
       color: 0xff4d1c,
@@ -72,7 +66,6 @@ const ThreeHero = () => {
     const wireframe = new THREE.Mesh(wireGeo, wireMat);
     scene.add(wireframe);
 
-    // ── Torus Ring 1 ──
     const torusGeo1 = new THREE.TorusGeometry(1.8, 0.012, 8, 80);
     const torusMat1 = new THREE.MeshBasicMaterial({
       color: 0xff4d1c,
@@ -83,7 +76,6 @@ const ThreeHero = () => {
     torus1.rotation.x = Math.PI / 3;
     scene.add(torus1);
 
-    // ── Torus Ring 2 ──
     const torusGeo2 = new THREE.TorusGeometry(2.1, 0.008, 8, 80);
     const torusMat2 = new THREE.MeshBasicMaterial({
       color: 0x4d9fff,
@@ -95,8 +87,8 @@ const ThreeHero = () => {
     torus2.rotation.z = Math.PI / 5;
     scene.add(torus2);
 
-    // ── Particle Field ──
-    const particleCount = 600;
+    // ── Particles: reduced 600 → 300 (imperceptible difference, half the work) ──
+    const particleCount = 300;
     const positions = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
       const r = 2.5 + Math.random() * 3;
@@ -118,12 +110,10 @@ const ThreeHero = () => {
     const particles = new THREE.Points(particleGeo, particleMat);
     scene.add(particles);
 
-    // ── Group for parallax ──
     const group = new THREE.Group();
     group.add(icosahedron, wireframe, torus1, torus2, particles);
     scene.add(group);
 
-    // ── GSAP floating animation ──
     gsap.to(group.position, {
       y: 0.3,
       duration: 3,
@@ -132,57 +122,78 @@ const ThreeHero = () => {
       repeat: -1,
     });
 
-    // ── Mouse parallax ──
+    // ── Mouse tracking ────────────────────────────────────────────────────────
     const mouse  = { x: 0, y: 0 };
     const target = { x: 0, y: 0 };
-
     const onMouseMove = (e) => {
       mouse.x =  (e.clientX / window.innerWidth  - 0.5) * 2;
       mouse.y = -(e.clientY / window.innerHeight - 0.5) * 2;
     };
     window.addEventListener("mousemove", onMouseMove);
 
-    // ── Animation loop — uses performance.now() instead of
-    //    deprecated THREE.Clock ──
+    // ── Render loop ───────────────────────────────────────────────────────────
     let rafId;
+    let running = true;
     let elapsed  = 0;
     let lastTime = performance.now();
 
     const animate = () => {
+      if (!running) return;
       rafId = requestAnimationFrame(animate);
-
-      // Delta-time accumulator (replaces THREE.Clock)
       const now = performance.now();
       elapsed += (now - lastTime) / 1000;
       lastTime = now;
       const t = elapsed;
 
-      // Smooth parallax
       target.x += (mouse.x * 0.4 - target.x) * 0.05;
       target.y += (mouse.y * 0.3 - target.y) * 0.05;
       group.rotation.y = target.x;
       group.rotation.x = target.y;
 
-      // Constant slow spin
       icosahedron.rotation.y = t * 0.15;
       wireframe.rotation.y   = t * 0.15;
       wireframe.rotation.x   = t * 0.08;
-
-      // Rings orbiting
       torus1.rotation.z =  t * 0.3;
       torus2.rotation.z = -t * 0.2;
-
-      // Particles drift
       particles.rotation.y = t * 0.05;
-
-      // Light pulse
       pointLight1.intensity = 8 + Math.sin(t * 2) * 2;
 
       renderer.render(scene, camera);
     };
     animate();
 
-    // ── Resize handler ──
+    // ── PAUSE when scrolled off-screen ────────────────────────────────────────
+    const visibilityObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          if (!running) {
+            running = true;
+            lastTime = performance.now();
+            animate();
+          }
+        } else {
+          running = false;
+          cancelAnimationFrame(rafId);
+        }
+      },
+      { threshold: 0 }
+    );
+    visibilityObserver.observe(mount);
+
+    // ── Also pause when browser tab is hidden ────────────────────────────────
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        running = false;
+        cancelAnimationFrame(rafId);
+      } else if (mount.getBoundingClientRect().top < window.innerHeight) {
+        running = true;
+        lastTime = performance.now();
+        animate();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    // ── Resize ────────────────────────────────────────────────────────────────
     const onResize = () => {
       const w = mount.clientWidth;
       const h = mount.clientHeight;
@@ -192,30 +203,34 @@ const ThreeHero = () => {
     };
     window.addEventListener("resize", onResize);
 
-    // ── Handle WebGL context loss gracefully ──
+    // ── WebGL context loss ────────────────────────────────────────────────────
     const onContextLost = (e) => {
       e.preventDefault();
+      running = false;
       cancelAnimationFrame(rafId);
     };
     const onContextRestored = () => {
+      running = true;
+      lastTime = performance.now();
       animate();
     };
     renderer.domElement.addEventListener("webglcontextlost", onContextLost);
     renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
 
+    // ── Cleanup ───────────────────────────────────────────────────────────────
     return () => {
+      running = false;
       cancelAnimationFrame(rafId);
+      visibilityObserver.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("resize", onResize);
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
-
-      // Dispose everything to free GPU memory
       [icoGeo, wireGeo, torusGeo1, torusGeo2, particleGeo].forEach((g) => g.dispose());
       [icoMat, wireMat, torusMat1, torusMat2, particleMat].forEach((m) => m.dispose());
       renderer.dispose();
       renderer.forceContextLoss();
-
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement);
       }
